@@ -6,22 +6,20 @@ with the user approving every edit and committing after each step.
 
 ## Stage
 
-Qwen Code built **Steps 1–7 in one go** and committed them itself as `a44afbc` (2026-10-14, 18:13). Claude Code
-reviewed that commit the same day; the findings are in `REVIEW.md`:
+Run 1 (Qwen built Steps 1–7 in one session, one commit `a44afbc`, then the solstice-button fix) is reviewed in
+`REVIEW.md` and saved at tag `run-1` (commit f697fd7). All 9 node checks passed; the one bug found was fixed by Qwen.
+The "(browser)" checks for Run 1 were never done.
 
-- All 9 `node -e` checks pass with the exact expected values. Every id and function name matches SPEC.md. Only the
-  seven specified files were created.
-- One bug: the Midsummer/Midwinter/Equinox buttons don't refresh `#sun-times` (`setSolsticeDate()` in `js/main.js`
-  never calls `updateSunTimes()`). REVIEW.md has a one-line fix prompt for Qwen.
-- Minor: the initial date uses the UTC day; clearing the date field while playing throws every frame; day length can
-  read "60 m"; the globe can be stretched after a resize in horizon view.
-- The "(browser)" checks have not been done yet.
+Being set up for **Run 2: "Do all steps"**. SPEC.md has a new "Do all steps" section: Qwen builds each step, runs
+its node checks (up to 3 fix attempts), commits each step itself (`git add -A`, then `git commit -m "Step N: …"`),
+and carries on, ending with a re-run of every check and a summary table. GETTING-STARTED.md section 2b has the
+user's side (auto-edit mode, `@SPEC.md Do all steps.`). REVIEW.md has an empty Run 2 table.
 
 ## Half-done or mid-edit
 
-- `.qwen/settings.json` is modified and uncommitted: the allow list gained `Bash(rm *)` and `Bash(git commit *)`
-  during the Qwen session (likely "always allow" answers). The user hasn't decided whether to keep them.
-- `REVIEW.md` and this file were updated by Claude Code after the review, not committed.
+- The Run 1 app files (`index.html`, `style.css`, `js/`) still need removing to get back to the scaffold. Claude
+  Code's auto-mode classifier blocked `git rm`, so the user runs it. Then commit the reset together with the SPEC,
+  guide, review and settings changes.
 
 ## The app
 
@@ -46,8 +44,9 @@ from the postcode, with sun paths and the solstice extremes.
   `globalThis.SunCalc = require('./vendor/suncalc.js')` first.
 - **Every expected number in SPEC.md was verified**: all 9 `node -e` checks were run, exactly as written, against
   a throwaway reference implementation (kept outside the repo) and print the stated values.
-- **Allow list:** `echo`, `node`, `ls`, `mkdir` only. `python3` was left out (unlike qwen-experiment) so the model
-  can't start `http.server` and hang the session; `rm` was left out so deletes ask.
+- **Allow list:** started as `echo`, `node`, `ls`, `mkdir`. `rm` and `git commit` were added during Run 1 (the
+  user's approvals), and `git add` for Run 2 so Qwen can commit each step. `python3` is still left out so the model
+  can't start `http.server` and hang the session.
 - **REVIEW.md** is the user's per-step review log. "Review step N" means: diff that step's commit against SPEC.md,
   rerun its node checks, fill in the section, and suggest a fix prompt if needed.
 
@@ -61,7 +60,8 @@ from the postcode, with sun paths and the solstice extremes.
 
 ## Exact next action
 
-1. With `python3 -m http.server 8000` running, go through the "(browser)" boxes in REVIEW.md at
-   http://localhost:8000.
-2. Give Qwen the fix prompt from REVIEW.md, Step 6 (`updateSunTimes()` in `setSolsticeDate()`), then commit.
-3. Decide whether to keep the `rm` and `git commit` allow rules, and commit or revert `.qwen/settings.json`.
+1. User: `git rm -r -q js index.html style.css`, then commit the reset with the doc changes.
+2. Run 2: new shell → `qwen` → Shift+Tab to auto-edit → `@SPEC.md Do all steps.`
+3. Afterwards, "review run 2": check each step's commit against SPEC.md, re-run the node checks, fill the Run 2
+   table in REVIEW.md, and note whether it compressed (session log in
+   `~/.qwen/projects/-home-colin-src-qwen-sun-world-dial/chats/`).

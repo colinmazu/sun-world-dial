@@ -29,13 +29,29 @@ The page is served by the user with `python3 -m http.server 8000` and viewed at 
 
 ## Instructions for the assistant
 
-- Do **only the step the user names**. Never start the next step on your own.
+- Do **only the step the user names**. Never start the next step on your own, unless the user says "Do all steps"
+  (see below).
 - Before writing code, briefly say what you will do.
 - Use the exact file names, element ids and function names given below. Later steps depend on them.
 - Keep everything from earlier steps working.
 - Create only the files listed above.
 - Never start a web server or any other command that keeps running.
 - When finished, run the step's `node` checks yourself, from the project folder. Then go through the "Done when" checklist, report each item as passed, failed, or "needs the user to check in the browser", and stop.
+
+### "Do all steps"
+
+When the user says **Do all steps**, build Steps 1–7 in order without waiting between them. For each step:
+
+1. Say in one line which step you are starting.
+2. Build it, following that step's section exactly.
+3. Run that step's `node` checks. If one fails, fix the code and run it again. If it still fails after 3 tries,
+   stop and tell the user.
+4. Report the "Done when" list in a few lines. Browser items are "needs the user"; don't stop for them.
+5. Commit with two separate commands: `git add -A`, then `git commit -m "Step N: <step title>"`.
+6. Go on to the next step.
+
+After Step 7, re-run **every** `node` check from Steps 1–6, then finish with a table: step, commit hash, node checks
+passed, and browser items for the user to check.
 
 ---
 

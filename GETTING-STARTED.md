@@ -22,7 +22,7 @@ These are the same as in `qwen-experiment`, with a tighter allow list:
 
 - `tools.approvalMode: "default"`: asks before every edit and every command that changes things.
 - `permissions.deny`: removes 66 tools this project doesn't need, which keeps the prompt to about 5k tokens.
-- `permissions.allow`: `echo`, `node`, `ls` and `mkdir` run without asking. `node` is there so the model can run the spec's checks itself. `rm` and `python3` are deliberately **not** allowed: deletes always ask, and the model can't start a web server that would hang the session.
+- `permissions.allow`: `echo`, `node`, `ls`, `mkdir`, `rm`, `git add` and `git commit` run without asking. `node` lets the model run the spec's checks itself, and `git add`/`git commit` let it commit each step in a whole-project run. `rm` was added during Run 1, so deletes no longer ask. `python3` is deliberately **not** allowed, so the model can't start a web server that would hang the session.
 - `memory.enableManagedAutoMemory: false`: stops it saving "Step 3 done" notes and acting on them later.
 
 **Your job:** read every approval prompt and say **No** when it isn't what you asked for. Check results in the browser yourself rather than trusting "Step 2 is complete".
@@ -72,6 +72,17 @@ qwen
 | 7 | `@SPEC.md Do Step 7 only.` | Polish (optional) |
 
 Step 4 is the biggest. If it struggles, split it: *"Do only the `subsolarPoint` part of Step 4"*, then *"Now do the rest of Step 4."*
+
+## 2b. Or: the whole project in one go
+
+Qwen builds Steps 1–7 by itself, running each step's checks, fixing what fails, and committing each step before going on. You watch, then check the result.
+
+1. Start from the clean scaffold (no `index.html` or `js/` yet), with the server running in Terminal A.
+2. Start `qwen` from a new shell and press **Shift+Tab** until the mode reads **auto-edit**, so it edits files without asking each time. Shell commands not on the allow list still ask.
+3. Type: `@SPEC.md Do all steps.`
+4. When it finishes, it re-runs every check and prints a table with each step's commit. Then do the browser checks yourself.
+
+Each step is still its own commit, so `git log` shows the history and any step can be inspected or undone. A run like this used about 62k tokens of context; Qwen Code compresses at about 98k, so it should finish without compressing.
 
 ## 3. Reviews with Claude Code
 

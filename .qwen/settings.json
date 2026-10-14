@@ -6,6 +6,7 @@
       "Bash(ls *)",
       "Bash(mkdir *)",
       "Bash(rm *)",
+      "Bash(git add *)",
       "Bash(git commit *)"
     ],
     "deny": [

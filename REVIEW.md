@@ -97,7 +97,7 @@ Model: `qwen_qwen3.6-27b` (LM Studio, 192.168.0.149, thinking off; 94,976 contex
 
 ---
 
-## Overall
+## Overall (Run 1)
 
 - **Steps passed first time:** all node checks for Steps 1–6 passed on the first run, and the code matches the spec's
   names and structure throughout. Browser checks are still to do.
@@ -106,3 +106,25 @@ Model: `qwen_qwen3.6-27b` (LM Studio, 192.168.0.149, thinking off; 94,976 contex
   `git commit`).
 - **Compared with the weight converter attempts:** no extra files and no off-spec features, unlike `attempt-1` of the
   weight converter. A much more detailed spec, with exact names and verified numbers, may be part of why.
+
+---
+
+## Run 2: "Do all steps" in one go
+
+- **Started from:** the clean scaffold, after `run-1` was tagged
+- **Approval mode:**
+- **Compressed?** (and at what point)
+- **Total time:**
+
+| Step | Commit | Node checks | Browser checks | Problems |
+| --- | --- | --- | --- | --- |
+| 1 Page and postcode lookup | | | | |
+| 2 Globe | | | | |
+| 3 Marker | | | | |
+| 4 Sun round the globe | | | | |
+| 5 Horizon view | | | | |
+| 6 Sun paths and extremes | | | | |
+| 7 Polish | | | | |
+
+- **Did its final summary match reality?**
+- **Compared with Run 1:**
