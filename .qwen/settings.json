@@ -83,7 +83,7 @@
     ]
   },
   "tools": {
-    "approvalMode": "default"
+    "approvalMode": "auto-edit"
   },
   "$version": 4,
   "memory": {
