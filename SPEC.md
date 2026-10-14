@@ -343,3 +343,87 @@ milliseconds one simulated day takes.
 - [ ] (browser) The page works at phone width (devtools, 375px).
 - [ ] (browser) Tab moves through every control in a sensible order, with a visible focus ring.
 - [ ] Every check from Steps 1–6 still passes.
+
+---
+
+## Step 8: Time-of-day slider
+
+**`index.html`**: In `#sun-controls`, after the speed select and before the view toggle button, add:
+
+```html
+<label for="time-slider">Time</label>
+<input type="range" id="time-slider" min="0" max="1439" step="1" value="720">
+<output id="time-display"></output>
+```
+
+The slider ranges from 0 (midnight) to 1439 (23:59), in 1-minute steps. The `<output>` shows the current slider time as `HH:MM` in UK time, e.g. `14:30`.
+
+**`js/main.js`**
+
+- On load, set the slider value to match `state.simTime`'s UK hour and minute:
+  `Math.floor(ukHour * 60 + ukMinute)`.
+- When the user drags the slider (`input` event):
+  - Set `state.simTime` to the slider's minute-of-day on the current simulated date (keeping the same year/month/day). Use the same UK-offset logic as the date input handler.
+  - Pause playback (`state.playing = false`, button text "Play").
+- Each frame, whether playing or not, update the slider value from `state.simTime`'s UK hour and minute (so it tracks during playback). Only touch the DOM if the value changed.
+- Update `#time-display` to show `HH:MM` in UK time each frame (only if changed).
+
+**Done when**
+
+- [ ] (browser) With `SW1A 1AA` on 21 June, dragging the slider moves the sun and horizon smoothly through the day. The clock and globe follow.
+- [ ] (browser) Pressing Play while the slider is at noon: the slider advances from right to left as hours pass.
+- [ ] (browser) Dragging the slider pauses playback; pressing Play resumes from the new position.
+
+---
+
+## Step 9: GitHub Pages hosting
+
+The project must be deployable to GitHub Pages without a build step — just push and enable Pages in repo settings.
+
+**`.github/workflows/deploy.yml`**: A workflow that deploys to GitHub Pages on push to `main`:
+
+```yaml
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [ main ]
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: '.'
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+```
+
+**`js/postcode.js`**: The postcode API URL is already absolute (`https://api.postcodes.io/…`) so it works from any origin. No changes needed — but the spec notes this explicitly so future editors don't make paths relative.
+
+**`index.html`**: All asset paths are relative (`style.css`, `js/main.js`, `vendor/suncalc.js`, `assets/earth.jpg`) and resolve correctly whether served from `/` (localhost) or `/repo-name/` (GitHub Pages). The import map uses absolute CDN URLs for Three.js. No changes needed — but verify no `<base>` tag is present.
+
+**Done when**
+
+- [ ] `test -f .github/workflows/deploy.yml && echo "workflow exists"` prints `workflow exists`
+- [ ] `grep -c '<base' index.html` prints `0` (no base tag that would break relative paths)
+- [ ] (browser/GitHub) After pushing to `main` and enabling Pages, the site loads at `https://<user>.github.io/<repo>/` with globe, horizon, and postcode lookup all working.

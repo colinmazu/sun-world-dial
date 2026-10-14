@@ -59,8 +59,42 @@ const viewToggle = document.getElementById('view-toggle');
 const globeDiv = document.getElementById('globe');
 const horizonCanvas = document.getElementById('horizon');
 const sunTimesEl = document.getElementById('sun-times');
+const timeSlider = document.getElementById('time-slider');
+const timeDisplay = document.getElementById('time-display');
 
-// Solstice / equinox buttons
+// UK formatters for hour/minute extraction
+const ukHourFmt = new Intl.DateTimeFormat('en-GB', {
+  timeZone: 'Europe/London', hour: 'numeric', hour12: false,
+});
+const ukMinFmt = new Intl.DateTimeFormat('en-GB', {
+  timeZone: 'Europe/London', minute: 'numeric',
+});
+
+/** Return the UK minute-of-day (0–1439) for a Date. */
+function ukMinuteOfDay(d) {
+  return Number(ukHourFmt.format(d)) * 60 + Number(ukMinFmt.format(d));
+}
+
+/** Set simTime to a given UK minute-of-day on the current simulated date. */
+function setTimeFromSlider(minuteOfDay) {
+  const parts = dateInput.value.split('-').map(Number);
+  const utcNoon = new Date(Date.UTC(parts[0], parts[1] - 1, parts[2], 12, 0, 0));
+  const ukHour = Number(ukHourFmt.format(utcNoon));
+  const offsetHours = ukHour - 12;
+  // Start of UK day in UTC ms
+  const startMs = Date.UTC(parts[0], parts[1] - 1, parts[2]) - offsetHours * 3600000;
+  state.simTime = new Date(startMs + minuteOfDay * 60000);
+}
+
+// Initialise slider to match current simTime on load.
+timeSlider.value = ukMinuteOfDay(state.simTime);
+
+// Slider drag: set time and pause playback.
+timeSlider.addEventListener('input', () => {
+  setTimeFromSlider(Number(timeSlider.value));
+  state.playing = false;
+  playBtn.textContent = 'Play';
+});
 const midsummerBtn = document.getElementById('midsummer-btn');
 const midwinterBtn = document.getElementById('midwinter-btn');
 const equinoxBtn = document.getElementById('equinox-btn');
@@ -69,10 +103,7 @@ const equinoxBtn = document.getElementById('equinox-btn');
 function setSeason(month, day) {
   const year = state.simTime.getUTCFullYear();
   const utcNoon = new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
-  const ukHour = new Intl.DateTimeFormat('en-GB', {
-    timeZone: 'Europe/London', hour: 'numeric', hour12: false,
-  }).format(utcNoon);
-  const offsetHours = Number(ukHour) - 12;
+  const offsetHours = Number(ukHourFmt.format(utcNoon)) - 12;
   state.simTime = new Date(utcNoon.getTime() - offsetHours * 3600000);
   state.playing = false;
   playBtn.textContent = 'Play';
@@ -175,6 +206,17 @@ function tick(ts) {
 
     // Update clock
     simClock.textContent = ukFmt.format(state.simTime);
+
+    // Sync time slider and display from simTime (tracks during playback)
+    const currentMin = ukMinuteOfDay(state.simTime);
+    if (timeSlider.value !== String(currentMin)) {
+      timeSlider.value = currentMin;
+    }
+    const hh = String(Math.floor(currentMin / 60)).padStart(2, '0');
+    const mm = String(currentMin % 60).padStart(2, '0');
+    if (timeDisplay.textContent !== hh + ':' + mm) {
+      timeDisplay.textContent = hh + ':' + mm;
+    }
 
     // Sync date input when the simulated day changes
     const currentDateStr = new Intl.DateTimeFormat('en-GB', {
