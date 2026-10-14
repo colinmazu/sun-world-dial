@@ -109,7 +109,7 @@ Model: `qwen_qwen3.6-27b` (LM Studio, 192.168.0.149, thinking off; 94,976 contex
 
 ---
 
-## Run 2: "Do all steps" in one go
+## Run 2: "Do all steps" in one go (tag `run-2`, not reviewed yet)
 
 - **Started from:** the clean scaffold, after `run-1` was tagged
 - **Approval mode:**
@@ -128,3 +128,73 @@ Model: `qwen_qwen3.6-27b` (LM Studio, 192.168.0.149, thinking off; 94,976 contex
 
 - **Did its final summary match reality?**
 - **Compared with Run 1:**
+
+---
+
+## Run 3: "Do all steps" in one go (reviewed by Claude Code, 2026-10-14)
+
+- **Tag:** `run-3` (commits `30ddb80`..`02d16ba`, on top of scaffold `2ec75af`)
+- **Prompt:** one message, "do all steps", at 19:06:45 BST. **No other input.**
+- **Approval mode:** auto-edit. The Step 1 commit also carries the `.qwen/settings.json` switch to `auto-edit`,
+  swept in by `git add -A`.
+- **Stats:** 66 requests, 6 min 25 s, 20.2k output tokens, peak prompt 50.6k of 131k. **No compression.**
+  27 shell commands, 26 edits, 12 file writes, 5 reads. One edit failed (old and new text identical) and was skipped
+  harmlessly. About 1.5p of electricity.
+- **Process:** followed the "Do all steps" loop: checks after each step, one commit per step, and every check re-run
+  at the end with a summary table. It used `git add -A && git commit` as one command, not two as the spec asks;
+  harmless.
+- **Node checks:** all 9 pass with the exact expected values (re-run by Claude).
+
+| Step | Commit | Node checks | Code review | Problems |
+| --- | --- | --- | --- | --- |
+| 1 Page and postcode lookup | `30ddb80` | 4/4 | matches spec | network error message only matches browsers whose error text contains "fetch" (Safari says "Load failed") |
+| 2 Globe | `5e5e2d8` | 1/1 | matches spec | – |
+| 3 Marker | `ce863ff` | n/a | matches spec | – |
+| 4 Sun round the globe | `a660bb3` | 1/1 | **bug** | `subsolarPoint` divides seconds by **360** instead of 3600; date field sets 12:00 UTC, not 00:00 UK |
+| 5 Horizon view | `6005b44` | 2/2 | **bug** | view toggle can't hide anything (CSS `display: block` beats `hidden`) |
+| 6 Paths and extremes | `831546e` | 1/1 | **incomplete** | sunrise/sunset ticks with times missing; `#sun-times` doesn't refresh on a new postcode the same day; buttons use 12:00 UTC, not 12:00 UK |
+| 7 Polish | `02d16ba` | re-ran all | mostly | any exception (e.g. clearing the date field) stops the animation loop for good |
+
+### The bugs in detail
+
+1. **Sun jitter on the globe (Step 4).** `js/geo.js` line 51: `date.getUTCSeconds() / 360`. Verified: at 12:00:59
+   UTC the subsolar longitude comes out as −2.00° instead of +0.21°, so while playing, the sun wobbles by up to ~2.5°
+   every simulated minute. The spec's checks all use `:00` seconds, so they couldn't catch it. Runs 1 and 2 got this
+   line right.
+2. **View toggle doesn't hide (Step 5).** `style.css` gives `#globe` and `#horizon` `display: block`. An id rule
+   beats the browser's `[hidden] { display: none }`, so both stay on the page. "Show horizon" draws the canvas under
+   the globe instead of swapping, and the blank canvas takes space from the start.
+3. **Missing rise/set ticks (Step 6).** The spec asks for a tick at today's sunrise and sunset azimuths, with the UK
+   time, on the horizon line. `drawHorizon` has no such code.
+4. **Stale `#sun-times` (Step 6).** `updateSunTimes()` only runs when the UK day changes, so a second postcode on
+   the same day keeps showing the first location's times.
+5. **Loop dies on any error (Step 7 robustness).** `requestAnimationFrame(frame)` is the last line of `frame()`, so
+   one exception (an empty date field gives an Invalid Date) stops the globe, horizon and clock until reload. Run 1
+   scheduled the next frame first, which avoided this.
+
+Smaller things: dead code in `sunPath` (`noonLocal`, `ukTimeStr` unused, the UK offset worked out 144 times);
+`drawHorizon` calls `sunPath` five times per frame (about 720 SunCalc calls), which works but is wasteful.
+
+### Fix prompts (one at a time, then commit)
+
+> In js/geo.js subsolarPoint, getUTCSeconds() is divided by 360. It must be 3600. Change nothing else.
+
+> In style.css, `display: block` on #globe and #horizon overrides the `hidden` attribute, so the view toggle hides
+> nothing. Add `#globe[hidden], #horizon[hidden] { display: none; }`. Change nothing else.
+
+> SPEC.md Step 6 asks drawHorizon to draw a short tick on the horizon line at today's sunrise and sunset azimuths,
+> with the UK time above each. That part is missing. Add it using sunEvents. Change nothing else.
+
+> In js/main.js, #sun-times only refreshes when the day changes. Also refresh it after a successful postcode lookup
+> (reset lastSunTimesDay there). Change nothing else.
+
+### Browser checks
+
+- [ ] not done yet (expect bug 2 to show straight away when pressing "Show horizon")
+
+### Compared with Run 1
+
+All checks passed in both, and there were no extra files in either. Run 1 (step by step in one session, compressed
+once) had one bug and full Step 6 features. Run 3 (fully autonomous, no compression, ~6 minutes) has two real bugs
+and one missing feature. The checks it could run all passed, and the bugs are in exactly the places the checks don't
+reach. That suggests that, with the leash off, the model treats "checks pass" as "done".

@@ -20,7 +20,7 @@ Qwen Code will write `index.html`, `style.css` and `js/*.js`.
 
 These are the same as in `qwen-experiment`, with a tighter allow list:
 
-- `tools.approvalMode: "default"`: asks before every edit and every command that changes things.
+- `tools.approvalMode: "auto-edit"`: edits files without asking (set for whole-project runs); commands not on the allow list still ask. Press Shift+Tab to switch to `default` if you want to approve each edit.
 - `permissions.deny`: removes 66 tools this project doesn't need, which keeps the prompt to about 5k tokens.
 - `permissions.allow`: `echo`, `node`, `ls`, `mkdir`, `rm`, `git add` and `git commit` run without asking. `node` lets the model run the spec's checks itself, and `git add`/`git commit` let it commit each step in a whole-project run. `rm` was added during Run 1, so deletes no longer ask. `python3` is deliberately **not** allowed, so the model can't start a web server that would hang the session.
 - `memory.enableManagedAutoMemory: false`: stops it saving "Step 3 done" notes and acting on them later.
@@ -83,6 +83,18 @@ Qwen builds Steps 1–7 by itself, running each step's checks, fixing what fails
 4. When it finishes, it re-runs every check and prints a table with each step's commit. Then do the browser checks yourself.
 
 Each step is still its own commit, so `git log` shows the history and any step can be inspected or undone. A run like this used about 62k tokens of context; Qwen Code compresses at about 98k, so it should finish without compressing.
+
+### Starting a fresh run
+
+Save the finished run under a tag, then remove just the app files. This keeps the spec, the guides and `REVIEW.md` (with its reviews) as they are:
+
+```bash
+git tag run-4                               # use the next free number
+git rm -r -q js index.html style.css
+git commit -m "Reset for run 5"
+```
+
+Don't use `git reset --hard` to an old commit for this: it also rolls back `REVIEW.md` and any guide changes made since.
 
 ## 3. Reviews with Claude Code
 

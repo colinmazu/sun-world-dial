@@ -6,20 +6,21 @@ with the user approving every edit and committing after each step.
 
 ## Stage
 
-Run 1 (Qwen built Steps 1–7 in one session, one commit `a44afbc`, then the solstice-button fix) is reviewed in
-`REVIEW.md` and saved at tag `run-1` (commit f697fd7). All 9 node checks passed; the one bug found was fixed by Qwen.
-The "(browser)" checks for Run 1 were never done.
+Three runs done, each saved under a tag:
 
-Being set up for **Run 2: "Do all steps"**. SPEC.md has a new "Do all steps" section: Qwen builds each step, runs
-its node checks (up to 3 fix attempts), commits each step itself (`git add -A`, then `git commit -m "Step N: …"`),
-and carries on, ending with a re-run of every check and a summary table. GETTING-STARTED.md section 2b has the
-user's side (auto-edit mode, `@SPEC.md Do all steps.`). REVIEW.md has an empty Run 2 table.
+- `run-1`: Steps 1–7 in one session, one commit; reviewed; one bug, fixed.
+- `run-2`: "Do all steps", one commit per step; **not reviewed**.
+- `run-3`: "Do all steps", 66 requests, 6 min 25 s, peak 50.6k, no compression; reviewed in REVIEW.md. All node
+  checks pass, but there are two real bugs (seconds/360 in `subsolarPoint`; CSS `display: block` defeats `hidden`),
+  one missing Step 6 feature (rise/set ticks), and a stale `#sun-times` on a new postcode. Fix prompts are in
+  REVIEW.md, not yet applied.
+
+`main` is at Run 3 plus Claude's doc commits. Fresh runs now use `git rm` + commit, not `git reset --hard` (see
+GETTING-STARTED, "Starting a fresh run"), because the reset dropped commit `04bda96` and would roll back REVIEW.md.
 
 ## Half-done or mid-edit
 
-- The Run 1 app files (`index.html`, `style.css`, `js/`) still need removing to get back to the scaffold. Claude
-  Code's auto-mode classifier blocked `git rm`, so the user runs it. Then commit the reset together with the SPEC,
-  guide, review and settings changes.
+Nothing uncommitted.
 
 ## The app
 
@@ -60,8 +61,8 @@ from the postcode, with sun paths and the solstice extremes.
 
 ## Exact next action
 
-1. User: `git rm -r -q js index.html style.css`, then commit the reset with the doc changes.
-2. Run 2: new shell → `qwen` → Shift+Tab to auto-edit → `@SPEC.md Do all steps.`
-3. Afterwards, "review run 2": check each step's commit against SPEC.md, re-run the node checks, fill the Run 2
-   table in REVIEW.md, and note whether it compressed (session log in
-   `~/.qwen/projects/-home-colin-src-qwen-sun-world-dial/chats/`).
+User's choice:
+- apply Run 3's four fix prompts in Qwen (one at a time, commit each), then do the browser checks; or
+- "review run 2"; or
+- the spec gap: none of the checks use a time with seconds, and none check that `hidden` actually hides. Adding them
+  would catch Run 3's bugs, but changes the test between runs, so ask before editing SPEC.md.
