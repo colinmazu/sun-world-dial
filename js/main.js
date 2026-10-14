@@ -37,7 +37,11 @@ form.addEventListener('submit', async (e) => {
     result.textContent = loc.postcode + ': ' + formatLatLon(loc.lat, loc.lon);
     setMarker(state.lat, state.lon);
   } catch (err) {
-    result.textContent = err.message;
+    if (err instanceof TypeError && err.message.includes('fetch')) {
+      result.textContent = "Couldn't reach the postcode service.";
+    } else {
+      result.textContent = err.message;
+    }
   } finally {
     btn.disabled = false;
   }

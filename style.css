@@ -30,6 +30,12 @@ button { cursor: pointer; background: #3d8fe0; color: #fff; border-color: #2a7bc
 button:hover { background: #2a7bc4; }
 button:disabled { opacity: 0.5; cursor: default; }
 
+/* Visible focus styles on every control */
+input:focus, button:focus, select:focus {
+  outline: 2px solid #3d8fe0;
+  outline-offset: 2px;
+}
+
 #location-result { text-align: center; min-height: 1.2em; margin: 0.5rem 0; }
 
 #sun-controls { display: flex; gap: 0.5rem; justify-content: center; align-items: center; flex-wrap: wrap; margin-bottom: 1rem; }
@@ -41,3 +47,16 @@ button:disabled { opacity: 0.5; cursor: default; }
 
 #globe { width: 100%; aspect-ratio: 1 / 1; max-height: 80vh; display: block; }
 #horizon { width: 100%; aspect-ratio: 3 / 1; display: block; }
+
+/* Narrow screens: controls wrap neatly, no horizontal scroll */
+@media (max-width: 600px) {
+  body { padding: 0.5rem; }
+  form { flex-direction: column; align-items: stretch; }
+  #sun-controls { flex-direction: column; align-items: stretch; }
+  #sim-clock { text-align: center; }
+}
+
+/* Reduced motion: disable orbit damping */
+@media (prefers-reduced-motion: reduce) {
+  /* Handled in globe.js via matchMedia check */
+}
