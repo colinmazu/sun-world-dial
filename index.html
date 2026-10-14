@@ -34,10 +34,12 @@
         <option value="24000" selected>1 day in 24 s</option>
         <option value="60000">1 day in 60 s</option>
       </select>
+      <button id="view-toggle">Show horizon</button>
       <p id="sim-clock" aria-live="off"></p>
     </section>
     <section id="views">
       <div id="globe"></div>
+      <canvas id="horizon" hidden></canvas>
     </section>
   </main>
   <script type="module" src="js/main.js"></script>

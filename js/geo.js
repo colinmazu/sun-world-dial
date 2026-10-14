@@ -57,3 +57,11 @@ export function subsolarPoint(date) {
 export function advanceTime(simTime, elapsedMs, dayMs) {
   return new Date(simTime.getTime() + (elapsedMs * 86400000) / dayMs);
 }
+
+/** Return sun altitude and azimuth { alt, az } in degrees for a given date and location. */
+export function sunAltAz(date, lat, lon) {
+  const p = globalThis.SunCalc.getPosition(date, lat, lon);
+  const alt = p.altitude * 180 / Math.PI;
+  const az = (p.azimuth * 180 / Math.PI + 180 + 360) % 360;
+  return { alt, az };
+}

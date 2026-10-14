@@ -3,6 +3,7 @@
 import { normalisePostcode, formatLatLon, advanceTime } from './geo.js';
 import { lookupPostcode } from './postcode.js';
 import { createGlobe, setMarker, updateGlobe } from './globe.js';
+import { drawHorizon } from './horizon.js';
 
 const state = {
   postcode: null,
@@ -49,6 +50,22 @@ const playBtn = document.getElementById('play-btn');
 const speedSelect = document.getElementById('speed-select');
 const dateInput = document.getElementById('date-input');
 const simClock = document.getElementById('sim-clock');
+const viewToggle = document.getElementById('view-toggle');
+const globeDiv = document.getElementById('globe');
+const horizonCanvas = document.getElementById('horizon');
+
+// View toggle: switch between globe and horizon
+viewToggle.addEventListener('click', () => {
+  if (horizonCanvas.hidden) {
+    horizonCanvas.hidden = false;
+    globeDiv.hidden = true;
+    viewToggle.textContent = 'Show globe';
+  } else {
+    horizonCanvas.hidden = true;
+    globeDiv.hidden = false;
+    viewToggle.textContent = 'Show horizon';
+  }
+});
 
 // UK formatter for the clock
 const ukFmt = new Intl.DateTimeFormat('en-GB', {
@@ -99,6 +116,11 @@ function tick(ts) {
       state.simTime = advanceTime(state.simTime, elapsedMs, state.dayMs);
     }
     updateGlobe(state);
+
+    // Draw horizon if visible
+    if (!horizonCanvas.hidden) {
+      drawHorizon(horizonCanvas, state);
+    }
 
     // Update clock
     simClock.textContent = ukFmt.format(state.simTime);

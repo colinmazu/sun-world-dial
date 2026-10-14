@@ -122,3 +122,10 @@ h1 { font-size: 1.75rem; }
   aspect-ratio: 1 / 1;
   max-height: 80vh;
 }
+
+#horizon {
+  width: 100%;
+  aspect-ratio: 3 / 1;
+}
+
+[hidden] { display: none !important; }
