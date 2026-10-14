@@ -3,6 +3,7 @@
 import { normalisePostcode, formatLatLon } from './geo.js';
 import { lookupPostcode } from './postcode.js';
 import { createGlobe, setMarker, updateGlobe } from './globe.js';
+import { drawHorizon } from './horizon.js';
 
 const state = {
   postcode: null,
@@ -50,6 +51,9 @@ const dateInput = document.getElementById('date-input');
 const playBtn = document.getElementById('play-btn');
 const speedSelect = document.getElementById('speed-select');
 const simClock = document.getElementById('sim-clock');
+const horizonCanvas = document.getElementById('horizon');
+const globeDiv = document.getElementById('globe');
+const viewToggle = document.getElementById('view-toggle');
 
 // UK time formatter for the clock
 const ukFmt = new Intl.DateTimeFormat('en-GB', {
@@ -58,20 +62,9 @@ const ukFmt = new Intl.DateTimeFormat('en-GB', {
   hour: '2-digit', minute: '2-digit', timeZoneName: 'short',
 });
 
-// Set date input to today (UK calendar)
-function ukToday() {
-  const parts = ukFmt.formatToParts(new Date());
-  const m = new Date().toLocaleString('en-GB', { timeZone: 'Europe/London' }).split(',')[0];
-  // Build a YYYY-MM-DD from UK date string
-  const d = new Date();
-  const y = d.getUTCFullYear();
-  return y + '-01-01'; // fallback, we use a simpler approach below
-}
-
-// Simpler: get today in UK time as YYYY-MM-DD
+// Get today in UK time as YYYY-MM-DD
 function ukDateStr(d) {
-  const s = d.toLocaleDateString('en-CA', { timeZone: 'Europe/London' });
-  return s; // ISO format YYYY-MM-DD
+  return d.toLocaleDateString('en-CA', { timeZone: 'Europe/London' });
 }
 
 dateInput.value = ukDateStr(state.simTime);
@@ -87,16 +80,18 @@ speedSelect.addEventListener('change', () => {
   state.dayMs = parseInt(speedSelect.value, 10);
 });
 
-// Date input change → set simTime to 00:00 UK time on that date
+// Date input change → set simTime to noon UTC on that date
 dateInput.addEventListener('change', () => {
-  const parts = dateInput.value.split('-'); // YYYY-MM-DD
-  // Create a date at noon UTC to avoid DST edge cases, then adjust to 00:00 UK
-  const base = new Date(parts[0], parseInt(parts[1], 10) - 1, parseInt(parts[2], 10), 12, 0, 0);
-  // Offset by the UK timezone offset at that time to get midnight UK
-  const offsetMs = base.getTimezoneOffset() * 60000;
-  // Actually we need Europe/London offset — use a trick: format noon UTC and compare
-  // Simpler: set to 12:00 UTC on the date, which is roughly noon UK (off by BST/GMT but close)
+  const parts = dateInput.value.split('-');
   state.simTime = new Date(Date.UTC(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10), 12, 0, 0));
+});
+
+// Step 5: view toggle
+viewToggle.addEventListener('click', () => {
+  const showingHorizon = !horizonCanvas.hidden;
+  horizonCanvas.hidden = !showingHorizon;
+  globeDiv.hidden = !showingHorizon;
+  viewToggle.textContent = showingHorizon ? 'Show horizon' : 'Show globe';
 });
 
 // Animation loop
@@ -113,6 +108,11 @@ function frame(now) {
 
   // Update globe sun position
   updateGlobe(state);
+
+  // Draw horizon if visible
+  if (!horizonCanvas.hidden) {
+    drawHorizon(horizonCanvas, state);
+  }
 
   // Update clock display
   simClock.textContent = ukFmt.format(state.simTime);

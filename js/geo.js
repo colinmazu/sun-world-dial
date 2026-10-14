@@ -57,3 +57,12 @@ export function subsolarPoint(date) {
 
   return { lat: latDeg, lon: lonDeg };
 }
+
+/** Return sun altitude and azimuth (degrees) for a given date and location. */
+export function sunAltAz(date, lat, lon) {
+  const pos = globalThis.SunCalc.getPosition(date, lat, lon);
+  const alt = pos.altitude * 180 / Math.PI;
+  // SunCalc azimuth: from south, west positive → compass bearing (0=N, 90=E)
+  const az = ((pos.azimuth * 180 / Math.PI + 180 + 360) % 360);
+  return { alt, az };
+}
