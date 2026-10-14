@@ -61,7 +61,7 @@ export function createGlobe(container) {
   // Orbit controls
   const controls = new OrbitControls(camera, renderer.domElement);
   controls.enablePan = false;
-  controls.enableDamping = true;
+  controls.enableDamping = !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   controls.minDistance = 1.5;
   controls.maxDistance = 6;
   controls.autoRotate = false;

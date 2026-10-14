@@ -114,6 +114,9 @@ h1 { font-size: 1.75rem; }
 
 #sim-clock { width: 100%; text-align: center; font-variant-numeric: tabular-nums; }
 
+/* sun-times */
+#sun-times { text-align: center; margin: 0.5rem 0; min-height: 1.5em; }
+
 /* views container */
 #views { display: flex; flex-direction: column; align-items: center; gap: 1rem; }
 
@@ -129,3 +132,15 @@ h1 { font-size: 1.75rem; }
 }
 
 [hidden] { display: none !important; }
+
+/* Narrow screens */
+@media (max-width: 600px) {
+  body { padding: 0.5rem; }
+  h1 { font-size: 1.25rem; }
+  #sun-controls { gap: 0.4rem; }
+}
+
+/* Reduced motion — disable orbit damping */
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
