@@ -2,10 +2,11 @@
 
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { latLonToVector3 } from './geo.js';
+import { latLonToVector3, subsolarPoint } from './geo.js';
 
 let scene, camera, renderer, earth;
 let markerGroup = null;
+let sunMesh, sunLight;
 
 /** Create the globe inside the given container element. */
 export function createGlobe(container) {
@@ -33,8 +34,17 @@ export function createGlobe(container) {
   earth.rotation.y = -Math.PI / 2;
   scene.add(earth);
 
-  // Lighting (ambient only for now)
-  scene.add(new THREE.AmbientLight(0xffffff, 2));
+  // Lighting: dim ambient + directional sun light
+  scene.add(new THREE.AmbientLight(0xffffff, 0.15));
+  sunLight = new THREE.DirectionalLight(0xffffff, 3);
+  scene.add(sunLight);
+
+  // Sun sphere (not to scale)
+  sunMesh = new THREE.Mesh(
+    new THREE.SphereGeometry(0.12),
+    new THREE.MeshBasicMaterial({ color: 0xffd23f }),
+  );
+  scene.add(sunMesh);
 
   // Orbit controls
   const controls = new OrbitControls(camera, renderer.domElement);
@@ -86,4 +96,12 @@ export function setMarker(lat, lon) {
   markerGroup.add(new THREE.Line(lineGeo, lineMat));
 
   scene.add(markerGroup);
+}
+
+/** Position sun mesh and directional light at the subsolar point for state.simTime. */
+export function updateGlobe(state) {
+  const sp = subsolarPoint(state.simTime);
+  const pos = latLonToVector3(sp.lat, sp.lon, 3);
+  sunMesh.position.set(pos.x, pos.y, pos.z);
+  sunLight.position.copy(sunMesh.position);
 }

@@ -22,7 +22,18 @@
       <button type="submit">Find me</button>
     </form>
     <p id="location-result" aria-live="polite"></p>
-    <section id="sun-controls"></section>
+    <section id="sun-controls">
+      <label for="date-input">Date</label>
+      <input type="date" id="date-input">
+      <button id="play-btn">Play</button>
+      <label for="speed-select">Speed</label>
+      <select id="speed-select">
+        <option value="12000">1 day in 12 s</option>
+        <option value="24000" selected>1 day in 24 s</option>
+        <option value="60000">1 day in 60 s</option>
+      </select>
+      <p id="sim-clock" aria-live="off"></p>
+    </section>
     <section id="views"><div id="globe"></div></section>
   </main>
   <script type="module" src="js/main.js"></script>
