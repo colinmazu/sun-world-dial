@@ -5,6 +5,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { latLonToVector3 } from './geo.js';
 
 let scene, camera, renderer, earth;
+let markerGroup = null;
 
 /** Build the globe inside the given container element. */
 export function createGlobe(container) {
@@ -59,4 +60,35 @@ export function createGlobe(container) {
     controls.update();
     renderer.render(scene, camera);
   });
+}
+
+/** Place (or move) a red marker at the given lat/lon on the globe. */
+export function setMarker(lat, lon) {
+  if (markerGroup) {
+    scene.remove(markerGroup);
+    markerGroup = null;
+  }
+  const pos  = latLonToVector3(lat, lon, 1.01);
+  const base = latLonToVector3(lat, lon, 1.0);
+  const tip  = latLonToVector3(lat, lon, 1.15);
+
+  markerGroup = new THREE.Group();
+
+  // Red sphere
+  const sphere = new THREE.Mesh(
+    new THREE.SphereGeometry(0.02),
+    new THREE.MeshBasicMaterial({ color: 0xff3333 })
+  );
+  sphere.position.set(pos.x, pos.y, pos.z);
+  markerGroup.add(sphere);
+
+  // Red line sticking out from the surface
+  const lineGeo = new THREE.BufferGeometry().setFromPoints([
+    new THREE.Vector3(base.x, base.y, base.z),
+    new THREE.Vector3(tip.x, tip.y, tip.z)
+  ]);
+  const line = new THREE.Line(lineGeo, new THREE.LineBasicMaterial({ color: 0xff3333 }));
+  markerGroup.add(line);
+
+  scene.add(markerGroup);
 }
