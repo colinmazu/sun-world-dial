@@ -26,3 +26,34 @@ export function latLonToVector3(lat, lon, radius) {
     z: radius * Math.cos(rLat) * Math.cos(rLon),
   };
 }
+
+/** Return the subsolar point { lat, lon } in degrees for a given Date. */
+export function subsolarPoint(date) {
+  const d = date.getTime() / 86400000 - 10957.5;
+  const g = 357.529 + 0.98560028 * d;
+  const q = 280.459 + 0.98564736 * d;
+  const L = q + 1.915 * Math.sin(g * Math.PI / 180) + 0.020 * Math.sin(2 * g * Math.PI / 180);
+  const e = 23.439 - 0.00000036 * d;
+  const lat = Math.asin(
+    Math.sin(e * Math.PI / 180) * Math.sin(L * Math.PI / 180)
+  ) * 180 / Math.PI;
+  const ra = Math.atan2(
+    Math.cos(e * Math.PI / 180) * Math.sin(L * Math.PI / 180),
+    Math.cos(L * Math.PI / 180)
+  ) * 180 / Math.PI / 15;
+  let eot = q / 15 - ra;
+  // Wrap EOT into -12..+12
+  while (eot > 12) eot -= 24;
+  while (eot <= -12) eot += 24;
+  const utcHours = date.getUTCHours() + date.getUTCMinutes() / 60 + date.getUTCSeconds() / 3600;
+  let lon = -15 * (utcHours - 12 + eot);
+  // Wrap into -180..+180
+  while (lon > 180) lon -= 360;
+  while (lon <= -180) lon += 360;
+  return { lat, lon };
+}
+
+/** Advance simulated time. elapsedMs is real ms since last frame; dayMs is ms per simulated day. */
+export function advanceTime(simTime, elapsedMs, dayMs) {
+  return new Date(simTime.getTime() + (elapsedMs * 86400000) / dayMs);
+}

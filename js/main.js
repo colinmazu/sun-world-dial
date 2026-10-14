@@ -1,8 +1,8 @@
 // Shared state, form handling, animation loop.
 
-import { normalisePostcode, formatLatLon } from './geo.js';
+import { normalisePostcode, formatLatLon, advanceTime } from './geo.js';
 import { lookupPostcode } from './postcode.js';
-import { createGlobe, setMarker } from './globe.js';
+import { createGlobe, setMarker, updateGlobe } from './globe.js';
 
 const state = {
   postcode: null,
@@ -15,7 +15,7 @@ const state = {
 
 export { state };
 
-// Wire up the postcode form.
+// --- Postcode form ---
 const form = document.getElementById('postcode-form');
 const input = document.getElementById('postcode-input');
 const result = document.getElementById('location-result');
@@ -44,5 +44,75 @@ form.addEventListener('submit', async (e) => {
   }
 });
 
-// Create the globe.
+// --- Controls ---
+const playBtn = document.getElementById('play-btn');
+const speedSelect = document.getElementById('speed-select');
+const dateInput = document.getElementById('date-input');
+const simClock = document.getElementById('sim-clock');
+
+// UK formatter for the clock
+const ukFmt = new Intl.DateTimeFormat('en-GB', {
+  timeZone: 'Europe/London',
+  weekday: 'short', day: 'numeric', month: 'short', year: 'numeric',
+  hour: '2-digit', minute: '2-digit', timeZoneName: 'short',
+});
+
+// Set date input to today (UK calendar) on load.
+dateInput.value = new Intl.DateTimeFormat('en-GB', {
+  timeZone: 'Europe/London', year: 'numeric', month: '2-digit', day: '2-digit',
+}).format(state.simTime).replace(/\//g, '-');
+
+playBtn.addEventListener('click', () => {
+  state.playing = !state.playing;
+  playBtn.textContent = state.playing ? 'Pause' : 'Play';
+});
+
+speedSelect.addEventListener('change', () => {
+  state.dayMs = Number(speedSelect.value);
+});
+
+dateInput.addEventListener('change', () => {
+  // Parse the YYYY-MM-DD and set simTime to 00:00 UK time on that date.
+  const parts = dateInput.value.split('-').map(Number);
+  // Create a UTC date for the given calendar day, then offset to UK midnight.
+  const utc = new Date(Date.UTC(parts[0], parts[1] - 1, parts[2], 12, 0, 0));
+  // Get UK offset at noon on that date
+  const ukStr = utc.toLocaleString('en-GB', { timeZone: 'Europe/London' });
+  // Parse the UK time to figure out offset — but don't use Date.parse on DD/MM/YYYY.
+  // Instead, compute offset by formatting in both UTC and UK.
+  const utcHour = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Europe/London', hour: 'numeric', hour12: false,
+  }).format(utc);
+  const ukOffsetHours = Number(utcHour) - 12; // difference from UTC noon
+  state.simTime = new Date(utc.getTime() - ukOffsetHours * 3600000);
+});
+
+// --- Globe & animation loop ---
 createGlobe(document.getElementById('globe'));
+
+let lastTs = null;
+
+function tick(ts) {
+  if (lastTs !== null) {
+    const elapsedMs = ts - lastTs;
+    if (state.playing) {
+      state.simTime = advanceTime(state.simTime, elapsedMs, state.dayMs);
+    }
+    updateGlobe(state);
+
+    // Update clock
+    simClock.textContent = ukFmt.format(state.simTime);
+
+    // Sync date input when the simulated day changes
+    const currentDateStr = new Intl.DateTimeFormat('en-GB', {
+      timeZone: 'Europe/London', year: 'numeric', month: '2-digit', day: '2-digit',
+    }).format(state.simTime).replace(/\//g, '-');
+    if (dateInput.value !== currentDateStr) {
+      dateInput.value = currentDateStr;
+    }
+  }
+  lastTs = ts;
+  requestAnimationFrame(tick);
+}
+
+requestAnimationFrame(tick);
