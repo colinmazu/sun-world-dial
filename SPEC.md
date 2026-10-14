@@ -91,6 +91,30 @@ passed, and browser items for the user to check.
 
 **`style.css`**: a clean, centred layout, max width about 900px, with readable system fonts.
 
+Use CSS custom properties for colours so the page respects `prefers-color-scheme`:
+
+```css
+:root {
+  --bg: #ffffff;
+  --fg: #1a1a1a;
+  --surface: #f5f5f5;
+  --border: #ccc;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1a1a1a;
+    --fg: #e8e8e8;
+    --surface: #2a2a2a;
+    --border: #555;
+  }
+}
+
+body { background: var(--bg); color: var(--fg); }
+```
+
+Inputs, buttons, and selects use `var(--surface)` for their background and `var(--border)` for borders. The globe scene already has a black background (dark-friendly). Horizon canvas colours are fixed and do not change with the theme.
+
 **Done when**
 
 - [ ] `node -e "import('./js/geo.js').then(m => console.log(m.normalisePostcode(' sw1a1aa '), m.normalisePostcode('ab10 1ab'), m.normalisePostcode('hello')))"` prints `SW1A 1AA AB10 1AB null`
@@ -98,6 +122,7 @@ passed, and browser items for the user to check.
 - [ ] `node -e "import('./js/postcode.js').then(m => m.lookupPostcode('SW1A 1AA')).then(console.log)"` prints lat ≈ 51.501 and lon ≈ −0.1416
 - [ ] `node -e "import('./js/postcode.js').then(m => m.lookupPostcode('ZZ9 9ZZ')).catch(e => console.log(e.message))"` prints `Postcode not found`
 - [ ] (browser) `sw1a1aa` shows `SW1A 1AA: 51.5010° N, 0.1416° W`, and `hello` shows the "doesn't look like" message.
+- [ ] (browser) Page respects `prefers-color-scheme`: dark mode OS setting produces a dark background and light text.
 
 ---
 

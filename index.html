@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sun World Dial</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="vendor/suncalc.js"></script>
+</head>
+<body>
+  <header>
+    <h1>Sun World Dial</h1>
+  </header>
+  <main>
+    <form id="postcode-form">
+      <label for="postcode-input">Your UK postcode</label>
+      <input type="text" id="postcode-input" autocomplete="postal-code" required>
+      <button type="submit">Find me</button>
+    </form>
+    <p id="location-result" aria-live="polite"></p>
+    <section id="views"></section>
+  </main>
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
