@@ -213,6 +213,7 @@ lon = -15 * (utcHours - 12 + eot), wrapped into -180..+180
 
 - [ ] `node -e "import('./js/geo.js').then(m => ['2026-06-21T12:00:00Z','2026-12-21T12:00:00Z','2026-06-21T18:00:00Z'].forEach(s => { const p = m.subsolarPoint(new Date(s)); console.log(s, p.lat.toFixed(2), p.lon.toFixed(2)); }))"` prints:
   `23.44 0.46` · `-23.43 -0.48` · `23.43 -89.53` (each ±0.05)
+- [ ] `node -e "import('./js/geo.js').then(m => ['2026-06-21T12:00:00Z','2026-06-21T12:00:59Z','2026-06-21T12:01:00Z'].forEach(s => console.log(s, m.subsolarPoint(new Date(s)).lon.toFixed(2))))"` prints `0.46`, `0.21`, `0.21`. Seconds count too: the sun moves 0.25° of longitude per minute, so 59 seconds is almost a whole minute.
 - [ ] (browser) Half the globe is lit and the yellow sun is on the lit side. Play makes the sun go round from east to west (right to left as you look at it).
 - [ ] (browser) Set 21 June with `SW1A 1AA`. The marker passes from light into dark at about 21:20 BST on `#sim-clock`.
 - [ ] (browser) The sun sits well above the equator on 21 June and well below it on 21 December.
@@ -249,7 +250,7 @@ lon = -15 * (utcHours - 12 + eot), wrapped into -180..+180
     - **Labels** just below the horizon line: NE 45, E 90, SE 135, S 180, SW 225, W 270, NW 315.
     - **Sun**: a `#ffd23f` circle of radius 12 CSS px at its position, drawn only if alt > −10.
 
-**`style.css`**: `#horizon` is full width with `aspect-ratio: 3 / 1`.
+**`style.css`**: `#horizon` is full width with `aspect-ratio: 3 / 1`. Also add exactly `[hidden] { display: none !important; }`, so the `hidden` attribute always wins over any `display` rule (an `#id` rule with `display: block` would otherwise beat it, and the toggle would hide nothing).
 
 **`js/main.js`**
 
@@ -258,6 +259,7 @@ lon = -15 * (utcHours - 12 + eot), wrapped into -180..+180
 
 **Done when**
 
+- [ ] `node -e "const c = require('fs').readFileSync('style.css', 'utf8'); console.log(/\[hidden\]\s*\{\s*display:\s*none\s*!important;?\s*\}/.test(c))"` prints `true`
 - [ ] `node -e "globalThis.SunCalc = require('./vendor/suncalc.js'); import('./js/geo.js').then(m => { const p = m.sunAltAz(new Date('2026-06-21T12:00:00Z'), 51.50101, -0.141563); console.log(p.alt.toFixed(2), p.az.toFixed(2)); })"` prints `61.93 178.75` (±0.05)
 - [ ] `node -e "import('./js/horizon.js').then(m => console.log(JSON.stringify([m.azAltToXY(30,70,1000,400), m.azAltToXY(180,0,1000,400), m.azAltToXY(330,-10,1000,400)])))"` prints `[{"x":0,"y":0},{"x":500,"y":350},{"x":1000,"y":400}]`
 - [ ] (browser) With `SW1A 1AA` on 21 June, Play: the sun rises on the left near NE, peaks just right of S at about 62° (well up the canvas), and sets near NW. The sky goes through night, twilight and day.

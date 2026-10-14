@@ -109,25 +109,56 @@ Model: `qwen_qwen3.6-27b` (LM Studio, 192.168.0.149, thinking off; 94,976 contex
 
 ---
 
-## Run 2: "Do all steps" in one go (tag `run-2`, not reviewed yet)
+## Run 2: "Do all steps" in one go (reviewed by Claude Code, 2026-10-14)
 
-- **Started from:** the clean scaffold, after `run-1` was tagged
-- **Approval mode:**
-- **Compressed?** (and at what point)
-- **Total time:**
+- **Tag:** `run-2` (commits `d2476ee`..`1f0502f`, on top of scaffold `2ec75af`)
+- **Prompt:** one message, "do all steps", at 18:44:27 BST. No other input.
+- **Stats:** 57 requests, 6 min 18 s, 22.2k output tokens, peak prompt 51.7k of 131k. No compression.
+- **Node checks:** all 9 pass. Re-run by Claude from the tag (extracted to a scratch folder).
 
-| Step | Commit | Node checks | Browser checks | Problems |
+| Step | Commit | Node checks | Code review | Problems |
 | --- | --- | --- | --- | --- |
-| 1 Page and postcode lookup | | | | |
-| 2 Globe | | | | |
-| 3 Marker | | | | |
-| 4 Sun round the globe | | | | |
-| 5 Horizon view | | | | |
-| 6 Sun paths and extremes | | | | |
-| 7 Polish | | | | |
+| 1 Page and postcode lookup | `d2476ee` | 4/4 | matches spec | – |
+| 2 Globe | `42fc89e` | 1/1 | matches spec | – |
+| 3 Marker | `7293ac0` | n/a | matches spec | – |
+| 4 Sun round the globe | `b0b5fd0` | 1/1 | **2 bugs** | Play runs 1000× too slowly; the date field breaks for days 13–31 |
+| 5 Horizon view | `f1cf2ab` | 2/2 | matches spec | toggle works (no `display` rule on the views) |
+| 6 Paths and extremes | `f139d32` | 1/1 | **broken + incomplete** | `sunPath` returns nothing for 21 Jun / 21 Dec; solstice buttons break the page; rise/set ticks missing |
+| 7 Polish | `1f0502f` | re-ran all | ok | – |
 
-- **Did its final summary match reality?**
-- **Compared with Run 1:**
+### The bugs in detail
+
+1. **Play is 1000× too slow (Step 4).** `js/main.js` `loop()`: `elapsedMs = (now - lastTime) / 1000` turns the frame
+   time into *seconds*, which are then used as milliseconds. At "1 day in 24 s", a simulated day takes about 6.7
+   hours. Verified: 60 ms of simulated time per frame instead of 60 s.
+2. **UK-time helpers parse dates with `Date.parse(toLocaleString('en-GB'))`.** That gives "21/06/2026, 13:00:00",
+   which JavaScript reads US-style (month first). Verified in Node: `NaN` for any day above 12, and the wrong month
+   for days 1–12. This breaks:
+   - `sunPath`: **0 points** for 21 June and 21 December (verified), so the midsummer and midwinter arcs and
+     today's path never draw on days 13–31, and on days 1–12 the path is for a different month.
+   - `ukMidnight` (used by the date field and the three solstice buttons): an Invalid Date for days 13–31. The
+     clock formatter then throws, and because `requestAnimationFrame` is the last line of `loop()`, the animation
+     stops until you reload. **All three solstice buttons (the 20th and 21st) trigger this.**
+3. **Rise/set ticks missing (Step 6)**: same omission as Run 3.
+4. Minor: the solstice buttons aim for 00:00, not 12:00 UK, and the comments say "noon"; the date field starts on
+   the UTC date.
+
+Done right: `updateSunTimes()` is called after a new postcode; the `hidden` toggle works; the seconds maths is right.
+
+### Fix prompts
+
+> In js/main.js loop(), elapsedMs is divided by 1000, so it is in seconds, not milliseconds. Remove the / 1000.
+> Change nothing else.
+
+> Date.parse() of toLocaleString('en-GB') output is unreliable (it reads 21/06 as month 21). In js/main.js
+> (getUKOffset) and js/geo.js (sunPath), work out the UK offset instead with
+> Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', hour: '2-digit', hourCycle: 'h23' }) at 12:00 UTC on
+> that day: offset hours = shown hour − 12. Change nothing else.
+
+### Why the checks missed it
+
+Every check targets `geo.js` maths at fixed, "nice" inputs. None calls `sunPath`, and nothing tests `main.js` (the
+loop speed, the date field, the buttons). Run 2's bugs are all in code the checks never run.
 
 ---
 
@@ -192,9 +223,25 @@ Smaller things: dead code in `sunPath` (`noonLocal`, `ukTimeStr` unused, the UK 
 
 - [ ] not done yet (expect bug 2 to show straight away when pressing "Show horizon")
 
-### Compared with Run 1
+### Compared with Runs 1 and 2
 
-All checks passed in both, and there were no extra files in either. Run 1 (step by step in one session, compressed
+All checks passed in all three runs, and none made extra files. Run 1 (step by step in one session, compressed
 once) had one bug and full Step 6 features. Run 3 (fully autonomous, no compression, ~6 minutes) has two real bugs
 and one missing feature. The checks it could run all passed, and the bugs are in exactly the places the checks don't
 reach. That suggests that, with the leash off, the model treats "checks pass" as "done".
+
+---
+
+## Cross-run summary (after reviewing Runs 1–3)
+
+| | Run 1 (step by step, one session) | Run 2 (all steps) | Run 3 (all steps) |
+| --- | --- | --- | --- |
+| Node checks | 9/9 | 9/9 | 9/9 |
+| Real bugs found by reading | 1 | 2 serious (Play speed, date parsing) | 2 (seconds, toggle) + stale times |
+| Step 6 rise/set ticks | yes | missing | missing |
+| Works in the browser? | mostly | **no**: solstice buttons stop the page, arcs never draw | mostly; the toggle is broken |
+
+Every bug in every run was in code the checks don't run. Passing checks meant "the tested functions are right", not
+"the app works". After this review SPEC.md gained two checks: a time with seconds (Step 4) and a `[hidden]` CSS rule
+(Step 5). Worth considering next: a `sunPath` check (it would have caught Run 2) and a check that `main.js` advances
+time at the right speed.
