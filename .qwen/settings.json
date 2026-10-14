@@ -4,7 +4,9 @@
       "Bash(echo *)",
       "Bash(node *)",
       "Bash(ls *)",
-      "Bash(mkdir *)"
+      "Bash(mkdir *)",
+      "Bash(rm *)",
+      "Bash(git commit *)"
     ],
     "deny": [
       "advisor",

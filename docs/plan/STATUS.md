@@ -6,7 +6,22 @@ with the user approving every edit and committing after each step.
 
 ## Stage
 
-Scaffolding done and committed; Step 1 not started. Qwen Code has written nothing yet.
+Qwen Code built **Steps 1–7 in one go** and committed them itself as `a44afbc` (2026-10-14, 18:13). Claude Code
+reviewed that commit the same day; the findings are in `REVIEW.md`:
+
+- All 9 `node -e` checks pass with the exact expected values. Every id and function name matches SPEC.md. Only the
+  seven specified files were created.
+- One bug: the Midsummer/Midwinter/Equinox buttons don't refresh `#sun-times` (`setSolsticeDate()` in `js/main.js`
+  never calls `updateSunTimes()`). REVIEW.md has a one-line fix prompt for Qwen.
+- Minor: the initial date uses the UTC day; clearing the date field while playing throws every frame; day length can
+  read "60 m"; the globe can be stretched after a resize in horizon view.
+- The "(browser)" checks have not been done yet.
+
+## Half-done or mid-edit
+
+- `.qwen/settings.json` is modified and uncommitted: the allow list gained `Bash(rm *)` and `Bash(git commit *)`
+  during the Qwen session (likely "always allow" answers). The user hasn't decided whether to keep them.
+- `REVIEW.md` and this file were updated by Claude Code after the review, not committed.
 
 ## The app
 
@@ -39,12 +54,14 @@ from the postcode, with sun paths and the solstice extremes.
 ## Environment
 
 - Model: `qwen_qwen3.6-27b` on LM Studio `192.168.0.149:1234` (thinking off via `reasoning_effort: "none"`,
-  94,976 context, MTP speculative decoding on). Configured in `~/.qwen/settings.json`; see
+  131,072 context since the evening of 2026-10-14 (94,976 before), MTP speculative decoding on). Configured in `~/.qwen/settings.json`; see
   `~/src/qwen-experiment/docs/plan/STATUS.md` for the server details.
 - postcodes.io: `GET https://api.postcodes.io/postcodes/{pc}`, no key, CORS on. `SW1A 1AA` → 51.50101, −0.141563;
   `AB10 1AB` → 57.14959, −2.096923; unknown → 404.
 
 ## Exact next action
 
-The user starts the server (`python3 -m http.server 8000`) and `qwen` in this folder, then
-`@SPEC.md Do Step 1 only.` Follow GETTING-STARTED.md section 2.
+1. With `python3 -m http.server 8000` running, go through the "(browser)" boxes in REVIEW.md at
+   http://localhost:8000.
+2. Give Qwen the fix prompt from REVIEW.md, Step 6 (`updateSunTimes()` in `setSolsticeDate()`), then commit.
+3. Decide whether to keep the `rm` and `git commit` allow rules, and commit or revert `.qwen/settings.json`.

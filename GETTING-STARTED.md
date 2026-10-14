@@ -93,4 +93,4 @@ You can also fill in `REVIEW.md` yourself. It's your record of how the model did
 
 ## 5. Keeping it running smoothly
 
-The model has a context of about 95k tokens. Qwen Code's own instructions take about 5k, and `SPEC.md` about 5k. **Run `/clear` between steps**: each step only needs `QWEN.md` and `@SPEC.md`, not the last conversation. `/stats` shows the tokens used so far.
+The model has a context of 131,072 tokens. Qwen Code compresses the conversation automatically at about 98k (it keeps 33k in reserve). Qwen Code's own instructions take about 5k, and `SPEC.md` about 5k. **Run `/clear` between steps**: each step only needs `QWEN.md` and `@SPEC.md`, not the last conversation. `/stats` shows the tokens used so far.

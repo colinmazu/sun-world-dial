@@ -75,6 +75,7 @@ function setSolsticeDate(month, day) {
   const mStr = mLookupInv[parts.find(p => p.type === 'month').value.toLowerCase()];
   const dStr = parts.find(p => p.type === 'day').value.padStart(2, '0');
   dateInput.value = `${yStr}-${mStr}-${dStr}`;
+  updateSunTimes();
 }
 
 // Solstice / equinox button handlers
