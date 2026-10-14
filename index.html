@@ -5,6 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Sun World Dial</title>
   <link rel="stylesheet" href="style.css">
+  <script type="importmap">
+  { "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+  } }
+  </script>
   <script src="vendor/suncalc.js"></script>
 </head>
 <body>
@@ -18,7 +24,9 @@
       <button type="submit">Find me</button>
     </form>
     <p id="location-result" aria-live="polite"></p>
-    <section id="views"></section>
+    <section id="views">
+      <div id="globe"></div>
+    </section>
   </main>
   <script type="module" src="js/main.js"></script>
 </body>

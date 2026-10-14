@@ -15,3 +15,14 @@ export function formatLatLon(lat, lon) {
   const lonStr = Math.abs(lon).toFixed(4) + '° ' + (lon >= 0 ? 'E' : 'W');
   return latStr + ', ' + lonStr;
 }
+
+/** Convert lat/lon (degrees) to a 3D point on a sphere. +z is lon 0°, +y is north, +x is 90° E. */
+export function latLonToVector3(lat, lon, radius) {
+  const rLat = lat * Math.PI / 180;
+  const rLon = lon * Math.PI / 180;
+  return {
+    x: radius * Math.cos(rLat) * Math.sin(rLon),
+    y: radius * Math.sin(rLat),
+    z: radius * Math.cos(rLat) * Math.cos(rLon),
+  };
+}

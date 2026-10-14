@@ -1,7 +1,8 @@
 // Shared state, form handling, animation loop.
 
-import { normalisePostcode } from './geo.js';
+import { normalisePostcode, formatLatLon } from './geo.js';
 import { lookupPostcode } from './postcode.js';
+import { createGlobe } from './globe.js';
 
 const state = {
   postcode: null,
@@ -42,5 +43,5 @@ form.addEventListener('submit', async (e) => {
   }
 });
 
-// Re-export formatLatLon for use in the form handler.
-import { formatLatLon } from './geo.js';
+// Create the globe.
+createGlobe(document.getElementById('globe'));
