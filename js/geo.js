@@ -65,3 +65,46 @@ export function sunAltAz(date, lat, lon) {
   const az = (p.azimuth * 180 / Math.PI + 180 + 360) % 360;
   return { alt, az };
 }
+
+/** Return sunrise/sunset events for a given date and location. */
+export function sunEvents(date, lat, lon) {
+  // Use 12:00 UTC on the UK calendar day to avoid picking the wrong day near midnight.
+  const ukDay = new Date(
+    date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate(), 12, 0, 0
+  );
+  const times = globalThis.SunCalc.getTimes(ukDay, lat, lon);
+  const sunriseAz = sunAltAz(times.sunrise, lat, lon).az;
+  const sunsetAz = sunAltAz(times.sunset, lat, lon).az;
+  return { sunrise: times.sunrise, sunset: times.sunset, sunriseAz, sunsetAz };
+}
+
+/** Return an array of { az, alt } points for the sun path every 10 minutes on a UK calendar day. */
+export function sunPath(date, lat, lon) {
+  // Determine the UK calendar date for this moment.
+  const ukParts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Europe/London', year: 'numeric', month: 'numeric', day: 'numeric',
+  }).formatToParts(date);
+  const ukYear = Number(ukParts.find(p => p.type === 'year').value);
+  const ukMonth = Number(ukParts.find(p => p.type === 'month').value) - 1; // 0-indexed
+  const ukDay = Number(ukParts.find(p => p.type === 'day').value);
+
+  // Work out the UTC offset for UK time at noon on that UK calendar day.
+  const noonUtc = new Date(Date.UTC(ukYear, ukMonth, ukDay, 12, 0, 0));
+  const ukHour = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Europe/London', hour: 'numeric', hour12: false,
+  }).format(noonUtc);
+  const offsetHours = Number(ukHour) - 12;
+
+  // Start at 00:00 UK time on the UK calendar day.
+  const startMs = Date.UTC(ukYear, ukMonth, ukDay) - offsetHours * 3600000;
+
+  const points = [];
+  for (let mins = 0; mins < 1440; mins += 10) {
+    const t = new Date(startMs + mins * 60000);
+    const p = sunAltAz(t, lat, lon);
+    if (p.alt > -10) {
+      points.push(p);
+    }
+  }
+  return points;
+}

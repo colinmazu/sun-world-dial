@@ -1,6 +1,6 @@
 // 2D horizon canvas — no Three.js.
 
-import { sunAltAz } from './geo.js';
+import { sunAltAz, sunPath, sunEvents } from './geo.js';
 
 /** Convert azimuth/altitude to pixel coordinates on the horizon canvas. */
 export function azAltToXY(az, alt, width, height) {
@@ -77,6 +77,73 @@ export function drawHorizon(canvas, state) {
     const px = (l.az - 30) / 300 * w;
     ctx.fillText(l.text, px, horizonY + 14);
   }
+
+  // --- Sun paths ---
+  const year = state.simTime.getUTCFullYear();
+
+  /** Draw a path as a line on the canvas. */
+  function drawPathLine(points, color, lineWidth, dashed) {
+    if (points.length < 2) return;
+    ctx.beginPath();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = lineWidth;
+    if (dashed) ctx.setLineDash([6, 4]);
+    else ctx.setLineDash([]);
+    const start = azAltToXY(points[0].az, points[0].alt, w, h);
+    ctx.moveTo(start.x, start.y);
+    for (let i = 1; i < points.length; i++) {
+      const p = azAltToXY(points[i].az, points[i].alt, w, h);
+      ctx.lineTo(p.x, p.y);
+    }
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  // Midsummer path (21 June) — dashed white at 35% opacity
+  const midsummerDate = new Date(Date.UTC(year, 5, 21, 12, 0, 0));
+  drawPathLine(sunPath(midsummerDate, state.lat, state.lon), 'rgba(255,255,255,0.35)', 1.5, true);
+
+  // Midwinter path (21 December) — dashed white at 35% opacity
+  const midwinterDate = new Date(Date.UTC(year, 11, 21, 12, 0, 0));
+  drawPathLine(sunPath(midwinterDate, state.lat, state.lon), 'rgba(255,255,255,0.35)', 1.5, true);
+
+  // Current day path — solid yellow
+  const todayPath = sunPath(state.simTime, state.lat, state.lon);
+  drawPathLine(todayPath, '#ffd23f', 2, false);
+
+  // Labels for solstice paths near their highest point
+  ctx.font = '11px system-ui, sans-serif';
+  function labelPath(points, text) {
+    if (points.length === 0) return;
+    const top = points.reduce((a, b) => b.alt > a.alt ? b : a);
+    const p = azAltToXY(top.az, top.alt, w, h);
+    ctx.fillStyle = 'rgba(255,255,255,0.6)';
+    ctx.fillText(text, p.x, p.y - 8);
+  }
+  labelPath(sunPath(midsummerDate, state.lat, state.lon), '21 Jun');
+  labelPath(sunPath(midwinterDate, state.lat, state.lon), '21 Dec');
+
+  // Sunrise/sunset ticks on the horizon line
+  const ev = sunEvents(state.simTime, state.lat, state.lon);
+  const ukFmtShort = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Europe/London', hour: '2-digit', minute: '2-digit',
+  });
+
+  function drawTick(az, time) {
+    const px = (az - 30) / 300 * w;
+    ctx.strokeStyle = '#ffd23f';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(px, horizonY);
+    ctx.lineTo(px, horizonY - 8);
+    ctx.stroke();
+    ctx.fillStyle = '#ffd23f';
+    ctx.font = '10px system-ui, sans-serif';
+    ctx.fillText(ukFmtShort.format(time), px, horizonY - 10);
+  }
+
+  drawTick(ev.sunriseAz, ev.sunrise);
+  drawTick(ev.sunsetAz, ev.sunset);
 
   // Sun
   if (alt > -10) {

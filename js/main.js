@@ -1,6 +1,6 @@
 // Shared state, form handling, animation loop.
 
-import { normalisePostcode, formatLatLon, advanceTime } from './geo.js';
+import { normalisePostcode, formatLatLon, advanceTime, sunEvents } from './geo.js';
 import { lookupPostcode } from './postcode.js';
 import { createGlobe, setMarker, updateGlobe } from './globe.js';
 import { drawHorizon } from './horizon.js';
@@ -38,6 +38,7 @@ form.addEventListener('submit', async (e) => {
     state.lon = loc.lon;
     result.textContent = loc.postcode + ': ' + formatLatLon(loc.lat, loc.lon);
     setMarker(state.lat, state.lon);
+    updateSunTimes();
   } catch (err) {
     result.textContent = err.message;
   } finally {
@@ -53,6 +54,52 @@ const simClock = document.getElementById('sim-clock');
 const viewToggle = document.getElementById('view-toggle');
 const globeDiv = document.getElementById('globe');
 const horizonCanvas = document.getElementById('horizon');
+const sunTimesEl = document.getElementById('sun-times');
+
+// Solstice / equinox buttons
+const midsummerBtn = document.getElementById('midsummer-btn');
+const midwinterBtn = document.getElementById('midwinter-btn');
+const equinoxBtn = document.getElementById('equinox-btn');
+
+/** Set simTime to 12:00 UK time on a given month/day in the current simulated year. */
+function setSeason(month, day) {
+  const year = state.simTime.getUTCFullYear();
+  const utcNoon = new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
+  const ukHour = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Europe/London', hour: 'numeric', hour12: false,
+  }).format(utcNoon);
+  const offsetHours = Number(ukHour) - 12;
+  state.simTime = new Date(utcNoon.getTime() - offsetHours * 3600000);
+  state.playing = false;
+  playBtn.textContent = 'Play';
+}
+
+midsummerBtn.addEventListener('click', () => setSeason(6, 21));
+midwinterBtn.addEventListener('click', () => setSeason(12, 21));
+equinoxBtn.addEventListener('click', () => setSeason(3, 20));
+
+// UK time formatter for sunrise/sunset times
+const ukTimeFmt = new Intl.DateTimeFormat('en-GB', {
+  timeZone: 'Europe/London', hour: '2-digit', minute: '2-digit',
+});
+
+/** Update the #sun-times paragraph. */
+function updateSunTimes() {
+  if (state.lat === null) {
+    sunTimesEl.textContent = '';
+    return;
+  }
+  const ev = sunEvents(state.simTime, state.lat, state.lon);
+  const riseT = ukTimeFmt.format(ev.sunrise);
+  const setT = ukTimeFmt.format(ev.sunset);
+  const riseAz = Math.round(ev.sunriseAz);
+  const setAz = Math.round(ev.sunsetAz);
+  const diffMin = Math.round((ev.sunset - ev.sunrise) / 60000);
+  const h = Math.floor(diffMin / 60);
+  const m = diffMin % 60;
+  sunTimesEl.textContent =
+    `Sunrise ${riseT} (${riseAz}°) · Sunset ${setT} (${setAz}°) · Day length ${h} h ${m.toString().padStart(2, '0')} m`;
+}
 
 // View toggle: switch between globe and horizon
 viewToggle.addEventListener('click', () => {
@@ -131,6 +178,7 @@ function tick(ts) {
     }).format(state.simTime).replace(/\//g, '-');
     if (dateInput.value !== currentDateStr) {
       dateInput.value = currentDateStr;
+      updateSunTimes();
     }
   }
   lastTs = ts;
