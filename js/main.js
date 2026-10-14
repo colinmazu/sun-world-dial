@@ -2,7 +2,7 @@
 
 import { normalisePostcode, formatLatLon } from './geo.js';
 import { lookupPostcode } from './postcode.js';
-import { createGlobe } from './globe.js';
+import { createGlobe, setMarker } from './globe.js';
 
 const state = {
   postcode: null,
@@ -34,6 +34,7 @@ form.addEventListener('submit', async (e) => {
     state.lat = loc.lat;
     state.lon = loc.lon;
     result.textContent = loc.postcode + ': ' + formatLatLon(loc.lat, loc.lon);
+    setMarker(state.lat, state.lon);
   } catch (err) {
     result.textContent = err.message;
   } finally {
