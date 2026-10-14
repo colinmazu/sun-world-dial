@@ -373,6 +373,7 @@ The slider ranges from 0 (midnight) to 1439 (23:59), in 1-minute steps. The `<ou
 - [ ] (browser) With `SW1A 1AA` on 21 June, dragging the slider moves the sun and horizon smoothly through the day. The clock and globe follow.
 - [ ] (browser) Pressing Play while the slider is at noon: the slider advances from right to left as hours pass.
 - [ ] (browser) Dragging the slider pauses playback; pressing Play resumes from the new position.
+- [ ] `node -e "const d = new Date(); const p = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(d); const s = p.find(x=>x.type==='year').value.padStart(4,'0')+'-'+p.find(x=>x.type==='month').value+'-'+p.find(x=>x.type==='day').value; console.log(/^\\d{4}-\\d{2}-\\d{2}$/.test(s) ? 'YYYY-MM-DD OK' : 'FAIL: '+s)"` prints `YYYY-MM-DD OK` (date input value is ISO format, not DD-MM-YYYY which the browser rejects silently)
 
 ---
 

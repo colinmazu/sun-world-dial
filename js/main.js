@@ -157,9 +157,14 @@ const ukFmt = new Intl.DateTimeFormat('en-GB', {
 });
 
 // Set date input to today (UK calendar) on load.
-dateInput.value = new Intl.DateTimeFormat('en-GB', {
+// <input type="date"> requires YYYY-MM-DD, so use ISO and slice the prefix.
+const ukIso = new Intl.DateTimeFormat('en-GB', {
   timeZone: 'Europe/London', year: 'numeric', month: '2-digit', day: '2-digit',
-}).format(state.simTime).replace(/\//g, '-');
+}).formatToParts(state.simTime);
+const y = ukIso.find(p => p.type === 'year').value.padStart(4, '0');
+const m = ukIso.find(p => p.type === 'month').value;
+const d = ukIso.find(p => p.type === 'day').value;
+dateInput.value = y + '-' + m + '-' + d;
 
 playBtn.addEventListener('click', () => {
   state.playing = !state.playing;
@@ -207,9 +212,9 @@ function tick(ts) {
     // Update clock
     simClock.textContent = ukFmt.format(state.simTime);
 
-    // Sync time slider and display from simTime (tracks during playback)
+    // Sync time slider and display from simTime (only update slider during playback)
     const currentMin = ukMinuteOfDay(state.simTime);
-    if (timeSlider.value !== String(currentMin)) {
+    if (state.playing && timeSlider.value !== String(currentMin)) {
       timeSlider.value = currentMin;
     }
     const hh = String(Math.floor(currentMin / 60)).padStart(2, '0');
@@ -219,9 +224,13 @@ function tick(ts) {
     }
 
     // Sync date input when the simulated day changes
-    const currentDateStr = new Intl.DateTimeFormat('en-GB', {
+    const dp = new Intl.DateTimeFormat('en-GB', {
       timeZone: 'Europe/London', year: 'numeric', month: '2-digit', day: '2-digit',
-    }).format(state.simTime).replace(/\//g, '-');
+    }).formatToParts(state.simTime);
+    const currentDateStr =
+      dp.find(p => p.type === 'year').value.padStart(4, '0') + '-' +
+      dp.find(p => p.type === 'month').value + '-' +
+      dp.find(p => p.type === 'day').value;
     if (dateInput.value !== currentDateStr) {
       dateInput.value = currentDateStr;
       updateSunTimes();
