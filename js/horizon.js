@@ -1,6 +1,6 @@
 // 2D horizon canvas: azimuth panorama from NE through S to NW.
 
-import { sunAltAz, sunPath } from './geo.js';
+import { sunAltAz, sunPath, sunEvents } from './geo.js';
 
 /** Convert azimuth and altitude (degrees) to pixel coordinates on the canvas. */
 export function azAltToXY(az, alt, width, height) {
@@ -123,6 +123,25 @@ export function drawHorizon(canvas, state) {
 
   labelHighest(sunPath(midsummerDate, state.lat, state.lon), '21 Jun');
   labelHighest(sunPath(midwinterDate, state.lat, state.lon), '21 Dec');
+
+  // Sunrise/sunset ticks on the horizon line
+  const events = sunEvents(state.simTime, state.lat, state.lon);
+  for (const ev of [events.sunrise, events.sunset]) {
+    if (!ev) continue;
+    const evAz = ev === events.sunrise ? events.sunriseAz : events.sunsetAz;
+    const tickP = azAltToXY(evAz, 0, w, h);
+    ctx.beginPath();
+    ctx.moveTo(tickP.x, tickP.y - 6);
+    ctx.lineTo(tickP.x, tickP.y + 2);
+    ctx.strokeStyle = 'rgba(255,255,255,0.8)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    const timeStr = ev.toLocaleTimeString('en-GB', { timeZone: 'Europe/London', hour: '2-digit', minute: '2-digit' });
+    ctx.fillStyle = 'rgba(255,255,255,0.8)';
+    ctx.font = '10px system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(timeStr, tickP.x, tickP.y - 10);
+  }
 
   // Draw sun if above −10° altitude
   if (alt > -10) {

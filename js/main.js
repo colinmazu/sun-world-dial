@@ -36,6 +36,7 @@ form.addEventListener('submit', async (e) => {
     state.lon = loc.lon;
     result.textContent = loc.postcode + ': ' + formatLatLon(loc.lat, loc.lon);
     setMarker(state.lat, state.lon);
+    lastSunTimesDay = '';
   } catch (err) {
     if (err instanceof TypeError && err.message.includes('fetch')) {
       result.textContent = "Couldn't reach the postcode service.";

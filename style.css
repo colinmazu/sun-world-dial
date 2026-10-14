@@ -47,6 +47,7 @@ input:focus, button:focus, select:focus {
 
 #globe { width: 100%; aspect-ratio: 1 / 1; max-height: 80vh; display: block; }
 #horizon { width: 100%; aspect-ratio: 3 / 1; display: block; }
+#globe[hidden], #horizon[hidden] { display: none; }
 
 /* Narrow screens: controls wrap neatly, no horizontal scroll */
 @media (max-width: 600px) {

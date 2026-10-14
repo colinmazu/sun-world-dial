@@ -48,7 +48,7 @@ export function subsolarPoint(date) {
   while (eot <= -12) eot += 24;
 
   // UTC hours from the date
-  const utcHours = date.getUTCHours() + date.getUTCMinutes() / 60 + date.getUTCSeconds() / 360;
+  const utcHours = date.getUTCHours() + date.getUTCMinutes() / 60 + date.getUTCSeconds() / 3600;
 
   // Subsolar longitude, wrapped to -180..+180
   let lonDeg = -15 * (utcHours - 12 + eot);
