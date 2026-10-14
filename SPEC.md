@@ -194,6 +194,11 @@ lon = -15 * (utcHours - 12 + eot), wrapped into -180..+180
 - Add a "sun": a yellow sphere (`SphereGeometry(0.12)`, `MeshBasicMaterial` colour `0xffd23f`).
 - Export `updateGlobe(state)`: take `subsolarPoint(state.simTime)` and put both the sun and the light at `latLonToVector3(sun.lat, sun.lon, 3)`. The sun is not to scale. The globe itself never turns; the sun goes round it.
 
+Also add and export `advanceTime(simTime, elapsedMs, dayMs)`, which returns a **new** `Date`:
+`simTime` plus `elapsedMs * 86400000 / dayMs` milliseconds. `elapsedMs` is real time in milliseconds (straight from
+the difference between two `requestAnimationFrame` timestamps, with no conversion), and `dayMs` is how many real
+milliseconds one simulated day takes.
+
 **`index.html`**: between `#location-result` and `#views`, add `<section id="sun-controls">` with:
 
 - a date input `id="date-input"` (label "Date"),
@@ -203,7 +208,7 @@ lon = -15 * (utcHours - 12 + eot), wrapped into -180..+180
 
 **`js/main.js`**
 
-- Run one `requestAnimationFrame` loop. Each frame, if `state.playing`, add `elapsedMs * 86400000 / state.dayMs` to `state.simTime`. Then call `updateGlobe(state)` and update `#sim-clock`.
+- Run one `requestAnimationFrame` loop. Each frame, if `state.playing`, set `state.simTime = advanceTime(state.simTime, elapsedMs, state.dayMs)`, where `elapsedMs` is the time since the last frame in milliseconds. Then call `updateGlobe(state)` and update `#sim-clock`.
 - `#sim-clock` shows the simulated time in UK time using `Intl.DateTimeFormat("en-GB", { timeZone: "Europe/London", weekday: "short", day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", timeZoneName: "short" })`, e.g. `Sun 21 Jun 2026, 21:22 BST`.
 - `#play-btn` toggles `state.playing` and its text between "Play" and "Pause".
 - `#speed-select` sets `state.dayMs`.
@@ -214,6 +219,8 @@ lon = -15 * (utcHours - 12 + eot), wrapped into -180..+180
 - [ ] `node -e "import('./js/geo.js').then(m => ['2026-06-21T12:00:00Z','2026-12-21T12:00:00Z','2026-06-21T18:00:00Z'].forEach(s => { const p = m.subsolarPoint(new Date(s)); console.log(s, p.lat.toFixed(2), p.lon.toFixed(2)); }))"` prints:
   `23.44 0.46` · `-23.43 -0.48` · `23.43 -89.53` (each ±0.05)
 - [ ] `node -e "import('./js/geo.js').then(m => ['2026-06-21T12:00:00Z','2026-06-21T12:00:59Z','2026-06-21T12:01:00Z'].forEach(s => console.log(s, m.subsolarPoint(new Date(s)).lon.toFixed(2))))"` prints `0.46`, `0.21`, `0.21`. Seconds count too: the sun moves 0.25° of longitude per minute, so 59 seconds is almost a whole minute.
+- [ ] `node -e "import('./js/geo.js').then(m => console.log(m.advanceTime(new Date('2026-06-21T12:00:00Z'), 1000, 24000).toISOString(), m.advanceTime(new Date('2026-06-21T12:00:00Z'), 16, 12000).toISOString()))"` prints `2026-06-21T13:00:00.000Z 2026-06-21T12:01:55.200Z` (at "1 day in 24 s", one real second is one simulated hour)
+- [ ] `node -e "console.log(/advanceTime\(\s*state\.simTime/.test(require('fs').readFileSync('js/main.js', 'utf8')))"` prints `true` (the loop really uses it)
 - [ ] (browser) Half the globe is lit and the yellow sun is on the lit side. Play makes the sun go round from east to west (right to left as you look at it).
 - [ ] (browser) Set 21 June with `SW1A 1AA`. The marker passes from light into dark at about 21:20 BST on `#sim-clock`.
 - [ ] (browser) The sun sits well above the equator on 21 June and well below it on 21 December.
@@ -272,7 +279,7 @@ lon = -15 * (utcHours - 12 + eot), wrapped into -180..+180
 **`js/geo.js`**: add and export:
 
 - `sunEvents(date, lat, lon)`. Call `SunCalc.getTimes` with a Date at **12:00 UTC** on `date`'s UK calendar day; a time near midnight can pick the wrong day. Return `{ sunrise, sunset, sunriseAz, sunsetAz }`. The azimuths come from `sunAltAz` at those times.
-- `sunPath(date, lat, lon)`: every 10 minutes from 00:00 to 24:00 UK time on `date`'s day, return `{ az, alt }` points (from `sunAltAz`) where `alt > -10`.
+- `sunPath(date, lat, lon)`: every 10 minutes from 00:00 to 24:00 UK time on `date`'s day, return `{ az, alt }` points (from `sunAltAz`) where `alt > -10`. Work out the UK offset with `Intl.DateTimeFormat` (`timeZone: "Europe/London"`). Don't use `Date.parse` on a `toLocaleString` result: it reads "21/06/2026" month-first.
 
 **`index.html`**: in `#sun-controls`, add buttons `id="midsummer-btn"` "Midsummer", `id="midwinter-btn"` "Midwinter" and `id="equinox-btn"` "Equinox". After `#views`, add `<p id="sun-times"></p>`.
 
@@ -291,6 +298,8 @@ lon = -15 * (utcHours - 12 + eot), wrapped into -180..+180
 
 - [ ] `node -e "globalThis.SunCalc = require('./vendor/suncalc.js'); import('./js/geo.js').then(m => ['2026-06-21','2026-12-21'].forEach(d => { const e = m.sunEvents(new Date(d + 'T12:00:00Z'), 51.50101, -0.141563); const t = x => x.toLocaleTimeString('en-GB', { timeZone: 'Europe/London', hour: '2-digit', minute: '2-digit' }); console.log(d, t(e.sunrise), e.sunriseAz.toFixed(1), t(e.sunset), e.sunsetAz.toFixed(1)); }))"` prints:
   `2026-06-21 04:44 49.1 21:22 311.3` and `2026-12-21 08:05 128.6 15:54 231.8` (times ±1 min, azimuths ±0.3)
+- [ ] `node -e "globalThis.SunCalc = require('./vendor/suncalc.js'); import('./js/geo.js').then(m => ['2026-06-21T12:00:00Z','2026-06-20T23:30:00Z','2026-12-21T12:00:00Z','2026-06-05T12:00:00Z'].forEach(s => { const p = m.sunPath(new Date(s), 51.50101, -0.141563); const top = p.reduce((a, b) => b.alt > a.alt ? b : a, { alt: -99 }); console.log(s, p.length, top.alt.toFixed(1)); }))"` prints:
+  `2026-06-21T12:00:00Z 118 61.9` · `2026-06-20T23:30:00Z 118 61.9` (00:30 BST is already 21 June) · `2026-12-21T12:00:00Z 61 15.1` · `2026-06-05T12:00:00Z 117 61.0`
 - [ ] (browser) With `SW1A 1AA`, all four sunrise and sunset points (both solstices) are inside the horizon view. The midsummer arc is clearly higher and wider than the midwinter one.
 - [ ] (browser) With `AB10 1AB`, the midsummer sunrise is further left (≈41°) and the midwinter arc lower (noon ≈9°) than for London.
 - [ ] (browser) The Midsummer, Midwinter and Equinox buttons jump the date and both views follow.

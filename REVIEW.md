@@ -242,6 +242,16 @@ reach. That suggests that, with the leash off, the model treats "checks pass" as
 | Works in the browser? | mostly | **no**: solstice buttons stop the page, arcs never draw | mostly; the toggle is broken |
 
 Every bug in every run was in code the checks don't run. Passing checks meant "the tested functions are right", not
-"the app works". After this review SPEC.md gained two checks: a time with seconds (Step 4) and a `[hidden]` CSS rule
-(Step 5). Worth considering next: a `sunPath` check (it would have caught Run 2) and a check that `main.js` advances
-time at the right speed.
+"the app works". After these reviews SPEC.md went from 9 to 14 checks:
+
+| New check | Step | Would have caught |
+| --- | --- | --- |
+| `subsolarPoint` at 12:00:59 → 0.21 | 4 | Run 3's seconds/360 (it gives −2.00) |
+| `advanceTime()` in geo.js gives 1 s → 1 h at 24 s/day | 4 | Run 2's 1000× slow Play (as a new required function) |
+| `main.js` calls `advanceTime(state.simTime…` | 4 | the loop doing its own maths again |
+| `[hidden] { display: none !important; }` in style.css | 5 | Run 3's toggle that hides nothing |
+| `sunPath` point counts and peaks for 21 Jun, 00:30 BST 21 Jun, 21 Dec and 5 Jun | 6 | Run 2's date parsing (0 points on the 21st; the wrong month on the 5th) |
+
+All 14 pass on a reference implementation. Runs 1–3 predate the `advanceTime` and `[hidden]` requirements, so they
+can't be scored on those. From Run 4 on, runs are scored against the 14-check spec and aren't directly comparable
+with Runs 1–3.

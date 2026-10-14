@@ -61,8 +61,8 @@ from the postcode, with sun paths and the solstice extremes.
 
 ## Exact next action
 
-User's choice:
-- apply Run 3's four fix prompts in Qwen (one at a time, commit each), then do the browser checks; or
-- "review run 2"; or
-- the spec gap: none of the checks use a time with seconds, and none check that `hidden` actually hides. Adding them
-  would catch Run 3's bugs, but changes the test between runs, so ask before editing SPEC.md.
+- SPEC.md now has 14 checks (seconds, `advanceTime` and its use in main.js, `[hidden]`, `sunPath`), all verified on a
+  scratch reference implementation. Runs 1–3 predate them. Run 2 and Run 3 are both reviewed in REVIEW.md.
+- The user was applying Run 3's fix prompts in Qwen (uncommitted changes in `js/` and `style.css`, left untouched).
+- Next: commit those fixes, then a fresh Run 4 against the new spec (`git tag`, `git rm -r -q js index.html
+  style.css`, commit, `@SPEC.md Do all steps.`).
