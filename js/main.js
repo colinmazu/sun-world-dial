@@ -2,6 +2,7 @@
 
 import { normalisePostcode, formatLatLon } from './geo.js';
 import { lookupPostcode } from './postcode.js';
+import { createGlobe } from './globe.js';
 
 const state = {
   postcode: null,
@@ -42,3 +43,6 @@ form.addEventListener('submit', async (e) => {
 
 // Re-export for later steps
 export { state };
+
+// Step 2: create the globe on load
+createGlobe(document.getElementById('globe'));
