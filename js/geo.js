@@ -66,3 +66,44 @@ export function sunAltAz(date, lat, lon) {
   const az = ((pos.azimuth * 180 / Math.PI + 180 + 360) % 360);
   return { alt, az };
 }
+
+/** Return sunrise/sunset times and azimuths for a given date and location. */
+export function sunEvents(date, lat, lon) {
+  // Use noon UTC on the UK calendar day to avoid midnight-day mismatch
+  const ukDay = date.toLocaleDateString('en-CA', { timeZone: 'Europe/London' });
+  const parts = ukDay.split('-');
+  const noonUTC = new Date(Date.UTC(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10), 12, 0, 0));
+  const times = globalThis.SunCalc.getTimes(noonUTC, lat, lon);
+  const srAz = sunAltAz(times.sunrise, lat, lon).az;
+  const ssAz = sunAltAz(times.sunset, lat, lon).az;
+  return { sunrise: times.sunrise, sunset: times.sunset, sunriseAz: srAz, sunsetAz: ssAz };
+}
+
+/** Return sun-path points (every 10 min, alt > -10) for a given date and location. */
+export function sunPath(date, lat, lon) {
+  const ukDay = date.toLocaleDateString('en-CA', { timeZone: 'Europe/London' });
+  const parts = ukDay.split('-');
+  const base = Date.UTC(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+  // Get UK offset to convert local hours to UTC
+  const noonUTC = new Date(base + 12 * 3600000);
+  const noonLocal = noonUTC.toLocaleString('en-GB', { timeZone: 'Europe/London', hour: '2-digit', minute: '2-digit', hour12: false });
+  // Simpler: iterate 00:00–24:00 UK time in 10-min steps
+  const points = [];
+  for (let min = 0; min < 1440; min += 10) {
+    const h = Math.floor(min / 60);
+    const m = min % 60;
+    // Create UTC time that corresponds to h:m UK time — approximate with offset
+    const ukTimeStr = parts[0] + '-' + parts[1] + '-' + parts[2] + 'T' + String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0') + ':00';
+    // Convert UK local to UTC by trying noon and measuring offset
+    const testUTC = new Date(base + 12 * 3600000);
+    const testParts = testUTC.toLocaleString('en-GB', { timeZone: 'Europe/London', hour: '2-digit', minute: '2-digit', hour12: false }).split(':');
+    const utcOffsetHrs = parseInt(testParts[0]) - 12;
+    const ts = base + min * 60000 - utcOffsetHrs * 3600000;
+    const d = new Date(ts);
+    const p = sunAltAz(d, lat, lon);
+    if (p.alt > -10) {
+      points.push({ az: p.az, alt: p.alt });
+    }
+  }
+  return points;
+}

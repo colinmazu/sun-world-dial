@@ -94,6 +94,54 @@ viewToggle.addEventListener('click', () => {
   viewToggle.textContent = showingHorizon ? 'Show horizon' : 'Show globe';
 });
 
+// Step 6: solstice buttons and sun times
+const midsummerBtn = document.getElementById('midsummer-btn');
+const midwinterBtn = document.getElementById('midwinter-btn');
+const equinoxBtn = document.getElementById('equinox-btn');
+const sunTimesEl = document.getElementById('sun-times');
+
+function setSolstice(month) {
+  const year = state.simTime.getFullYear();
+  // Set to noon UTC on the solstice/equinox date
+  state.simTime = new Date(Date.UTC(year, month, 21, 12, 0, 0));
+  state.playing = false;
+  playBtn.textContent = 'Play';
+}
+
+midsummerBtn.addEventListener('click', () => setSolstice(5));   // June = month 5
+midwinterBtn.addEventListener('click', () => setSolstice(11)); // December = month 11
+equinoxBtn.addEventListener('click', () => setSolstice(2));    // March = month 2
+
+// UK time formatter for sunrise/sunset times
+const ukTimeFmt = new Intl.DateTimeFormat('en-GB', {
+  timeZone: 'Europe/London', hour: '2-digit', minute: '2-digit', hour12: false,
+});
+
+function formatDayLength(ms) {
+  const totalMin = Math.round(ms / 60000);
+  const h = Math.floor(totalMin / 60);
+  const m = totalMin % 60;
+  return h + ' h ' + String(m).padStart(2, '0') + ' m';
+}
+
+// Update sun times display (not every frame — only on day/location change)
+let lastSunTimesDay = '';
+function updateSunTimes() {
+  if (state.lat === null) return;
+  const dayStr = ukDateStr(state.simTime);
+  if (dayStr === lastSunTimesDay) return;
+  lastSunTimesDay = dayStr;
+
+  // Dynamically import geo.js to get sunEvents (already loaded, but we need the function)
+  import('./geo.js').then(m => {
+    const ev = m.sunEvents(state.simTime, state.lat, state.lon);
+    const srTime = ukTimeFmt.format(ev.sunrise);
+    const ssTime = ukTimeFmt.format(ev.sunset);
+    const dayLen = formatDayLength(ev.sunset - ev.sunrise);
+    sunTimesEl.textContent = 'Sunrise ' + srTime + ' (' + Math.round(ev.sunriseAz) + '°) · Sunset ' + ssTime + ' (' + Math.round(ev.sunsetAz) + '°) · Day length ' + dayLen;
+  });
+}
+
 // Animation loop
 let lastTime = performance.now();
 
@@ -122,6 +170,9 @@ function frame(now) {
   if (currentDay !== dateInput.value) {
     dateInput.value = currentDay;
   }
+
+  // Update sun times on day change
+  updateSunTimes();
 
   requestAnimationFrame(frame);
 }
