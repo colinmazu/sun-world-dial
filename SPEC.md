@@ -17,13 +17,16 @@ A single web page. You type a UK postcode and see:
 | `js/globe.js` | The Three.js globe |
 | `js/horizon.js` | The 2D horizon canvas |
 | `js/main.js` | Shared state, the form, the controls, the animation loop |
+| `js/pano.js` | (Step 14) **Pure maths** for 360° photos, like `geo.js`: no DOM, Node must be able to import it |
+| `js/pano-ui.js` | (Step 15) Loading a 360° photo, the preview and the calibration |
 
 Already provided. Do not edit them:
 
 - `vendor/suncalc.js`: the SunCalc library. Loaded as a normal script, it sets `window.SunCalc`.
 - `assets/earth.jpg`: a 2048×1024 Earth map. Longitude −180° is at the left edge, 0° in the middle and north at the top.
+- `vendor/exifr-lite.umd.js`: exifr 7.1.3, which reads photo metadata (time, GPS, 360° layout). Loaded as a normal script, it sets `window.exifr`; in Node, `require('./vendor/exifr-lite.umd.js')`.
 
-Libraries: **Three.js 0.170.0** from the CDN through the import map in Step 2, and SunCalc. Nothing else, no npm and no build tools.
+Libraries: **Three.js 0.170.0** from the CDN through the import map in Step 2, SunCalc, and exifr (from Step 15). Nothing else, no npm and no build tools.
 
 The page is served by the user with `python3 -m http.server 8000` and viewed at http://localhost:8000. It does not work from `file://`.
 
@@ -695,3 +698,214 @@ The globe is square (up to 80vh tall) and the horizon is 3:1, so the page gets m
 - [ ] (browser) Scroll down a little, then switch to the horizon: the page doesn't jump.
 - [ ] (browser) Horizon at midday in June: the dashed 21 Jun and 21 Dec arcs and their labels show clearly in dark blue on the sky, and the yellow line has a dark edge. At night they are white again.
 - [ ] (browser) All the buttons in the controls row look alike.
+
+---
+
+## Steps 14–16: a 360° photo as the horizon
+
+The user has 360° photos (for example from a DJI drone: 12000×6000 JPEGs of about 38 MB). Steps 14–16 let them load one, mark where south is, and use it as the backdrop of the horizon view, with the sun and arcs drawn over the real skyline.
+
+Why this is simple: a 360° photo is **equirectangular**. Across the image is compass direction (360° over the full width), and down the image is altitude (+90° at the top, −90° at the bottom), both linear. The horizon canvas is linear in the same way (`azAltToXY`: azimuth 30°→330° across, altitude 70°→−10° down). So the horizon strip is just a **rectangle cut out of the photo and resized**, with no warping. The only catch is the photo's left/right edge (the seam): if the 300° span crosses it, the cut is two rectangles side by side.
+
+Words used below:
+- `meta`: where the decoded image sits on the full sphere (from `panoMeta`).
+- `southU`: where south is, as a fraction (0–1) of the full sphere's width, counted from its left edge. The user sets it.
+
+---
+
+## Step 14: Panorama maths (`js/pano.js`)
+
+A new file of **pure functions**, like `geo.js`: no DOM, no `fetch`, no Three.js. It may import from `./geo.js` if needed.
+
+- `export const STRIP_W = 2400;` and `export const STRIP_H = 800;`: the size of the horizon strip (3:1, like `#horizon`).
+- `panoMeta(exif, imgW, imgH)` → `{ fullW, fullH, left, top, w, h }`, all in the **decoded image's** pixels (the photo is decoded smaller than its real size, so the metadata must be scaled):
+  - If `exif.FullPanoWidthPixels` and `exif.CroppedAreaImageWidthPixels` are both set (the "GPano" tags), let `k = imgW / CroppedAreaImageWidthPixels`. Then `fullW = FullPanoWidthPixels * k`, `fullH = FullPanoHeightPixels * k` (or `fullW / 2` if that tag is missing), `left = (CroppedAreaLeftPixels || 0) * k` and `top = (CroppedAreaTopPixels || 0) * k`. Convert each tag with `Number()`.
+  - Otherwise treat the image as a full sphere: `fullW = imgW`, `fullH = imgW / 2`, `left = 0`, `top = (imgW / 2 - imgH) / 2`.
+  - In both cases `w = imgW` and `h = imgH`.
+- `uForAz(southU, az)` → the fraction (0–1) of the full width where azimuth `az` lies: `((southU + (az - 180) / 360) % 1 + 1) % 1`.
+- `southFromSun(clickU, sunAz)` → the `southU` that puts column `clickU` at azimuth `sunAz`: `((clickU - (sunAz - 180) / 360) % 1 + 1) % 1`.
+- `uAtImageX(meta, x)` → `(meta.left + x) / meta.fullW` (for clicks on the preview).
+- `altAtImageY(meta, y)` → `90 - (meta.top + y) / meta.fullH * 180`.
+- `panoCropRects(meta, southU, outW, outH)` → an array of `{ sx, sy, sw, sh, dx, dy, dw, dh }`, ready for `ctx.drawImage(img, sx, sy, sw, sh, dx, dy, dw, dh)`, that copies azimuth 30°→330° and altitude 70°→−10° into an `outW`×`outH` canvas:
+  - **Rows:** on the full sphere, altitude 70° is at `fullH * 20 / 180` and −10° at `fullH * 100 / 180`. Subtract `meta.top` to get image rows. These map to destination rows 0 → `outH`.
+  - **Columns:** on the full sphere the strip starts at `x0 = uForAz(southU, 30) * fullW` and is `span = fullW * 300 / 360` wide. If `x0 + span` is more than `fullW`, split it in two: `[x0, fullW)` and `[0, x0 + span - fullW)`. Each piece gets its share of the destination width, in proportion. Subtract `meta.left` to get image columns.
+  - **Clip** each range to the image (columns `0..meta.w`, rows `0..meta.h`), moving the matching destination range by the same proportion. For example, if the top 10% of the source rows is above the image, `dy` starts at 10% of `outH`. Drop a piece that is empty after clipping. Leave everything outside the photo undrawn (transparent).
+  - Write the clipping once, as a small helper used for rows and for columns.
+- `exifLocalToDate(str, offset)` → a `Date` from an EXIF time such as `"2023:12:25 13:12:42"`. Cameras store local time with no zone, so: with an `offset` like `"+01:00"` or `"-05:30"`, use it; with no offset, treat the time as UK local time. Copy this exactly:
+
+```js
+/** Turn an EXIF time like "2023:12:25 13:12:42" into a Date. offset is like "+01:00", or empty for UK local time. */
+export function exifLocalToDate(str, offset) {
+  const n = str.split(/[: ]/).map(Number);
+  const asUtc = Date.UTC(n[0], n[1] - 1, n[2], n[3], n[4], n[5]);
+  if (offset) {
+    const sign = offset[0] === '-' ? -1 : 1;
+    const [oh, om] = offset.slice(1).split(':').map(Number);
+    return new Date(asUtc - sign * (oh * 60 + om) * 60000);
+  }
+  // UK local: find how far London's clock is ahead of UTC at about that moment.
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Europe/London', hourCycle: 'h23',
+    year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit',
+  }).formatToParts(new Date(asUtc));
+  const p = t => Number(parts.find(x => x.type === t).value);
+  const london = Date.UTC(p('year'), p('month') - 1, p('day'), p('hour'), p('minute'), p('second'));
+  return new Date(asUtc - (london - asUtc));
+}
+```
+
+No changes to any other file in this step.
+
+**Done when**
+
+- [ ] `node -e "import('./js/pano.js').then(m => { const r = o => JSON.stringify(o, (k, v) => typeof v === 'number' ? Math.round(v * 1000) / 1000 : v); console.log(m.STRIP_W, m.STRIP_H); console.log(r(m.panoMeta({ FullPanoWidthPixels: 12000, FullPanoHeightPixels: 6000, CroppedAreaImageWidthPixels: 12000, CroppedAreaLeftPixels: 0, CroppedAreaTopPixels: 0 }, 4096, 2048))); console.log(r(m.panoMeta({ FullPanoWidthPixels: 19490, FullPanoHeightPixels: 9745, CroppedAreaImageWidthPixels: 19490, CroppedAreaLeftPixels: 0, CroppedAreaTopPixels: 1620 }, 4096, 1367))); console.log(r(m.panoMeta({}, 4096, 2048))); })"` prints:
+  ```
+  2400 800
+  {"fullW":4096,"fullH":2048,"left":0,"top":0,"w":4096,"h":2048}
+  {"fullW":4096,"fullH":2048,"left":0,"top":340.458,"w":4096,"h":1367}
+  {"fullW":4096,"fullH":2048,"left":0,"top":0,"w":4096,"h":2048}
+  ```
+- [ ] `node -e "import('./js/pano.js').then(m => { const meta = m.panoMeta({}, 4096, 2048); console.log(m.southFromSun(236.56 / 360, 194.73).toFixed(4), m.uForAz(0.6162, 194.73).toFixed(4), m.uForAz(0.1, 0).toFixed(4), m.uAtImageX(meta, 2048).toFixed(4), m.altAtImageY(meta, 1024).toFixed(2), m.altAtImageY(meta, 0).toFixed(2)); })"` prints `0.6162 0.6571 0.6000 0.5000 0.00 90.00`
+- [ ] `panoCropRects`, for a full sphere with south in the middle (one rectangle), with the span crossing the seam (two), and for a photo that stops at about +60° (the top of the strip left empty): `node -e "import('./js/pano.js').then(m => { const r = o => JSON.stringify(o, (k, v) => typeof v === 'number' ? Math.round(v * 1000) / 1000 : v); const full = m.panoMeta({}, 4096, 2048), part = m.panoMeta({ FullPanoWidthPixels: 19490, FullPanoHeightPixels: 9745, CroppedAreaImageWidthPixels: 19490, CroppedAreaLeftPixels: 0, CroppedAreaTopPixels: 1620 }, 4096, 1367); console.log(r(m.panoCropRects(full, 0.5, 2400, 800))); console.log(r(m.panoCropRects(full, 0.6162, 2400, 800))); console.log(r(m.panoCropRects(part, 0.5, 2400, 800))); })"` prints:
+  ```
+  [{"sx":341.333,"sy":227.556,"sw":3413.333,"sh":910.222,"dx":0,"dy":0,"dw":2400,"dh":800}]
+  [{"sx":817.289,"sy":227.556,"sw":3278.711,"sh":910.222,"dx":0,"dy":0,"dw":2305.344,"dh":800},{"sx":0,"sy":227.556,"sw":134.622,"sh":910.222,"dx":2305.344,"dy":0,"dw":94.656,"dh":800}]
+  [{"sx":341.333,"sy":0,"sw":3413.333,"sh":797.32,"dx":0,"dy":99.23,"dw":2400,"dh":700.77}]
+  ```
+  (the order of the keys must be exactly `sx, sy, sw, sh, dx, dy, dw, dh`)
+- [ ] `node -e "import('./js/pano.js').then(m => [['2023:12:25 13:12:42', ''], ['2024:07:01 13:00:00', undefined], ['2024:07:01 13:00:00', '+02:00'], ['2024:07:01 13:00:00', '-05:30']].forEach(([s, o]) => console.log(m.exifLocalToDate(s, o).toISOString())))"` prints:
+  ```
+  2023-12-25T13:12:42.000Z
+  2024-07-01T12:00:00.000Z
+  2024-07-01T11:00:00.000Z
+  2024-07-01T18:30:00.000Z
+  ```
+  (December is GMT, so no change; July is BST, so 13:00 in the UK is 12:00 UTC)
+- [ ] `node -e "const s = require('fs').readFileSync('js/pano.js', 'utf8'); console.log(/document|window|fetch/.test(s))"` prints `false`
+
+---
+
+## Step 15: Load a 360° photo and set south
+
+**`index.html`**:
+
+- In `<head>`, after the SunCalc script tag: `<script src="vendor/exifr-lite.umd.js"></script>`.
+- After `<p id="sun-times">`, add this panel:
+
+```html
+<details id="pano-panel">
+  <summary>Horizon photo</summary>
+  <label for="pano-input">Load a 360° photo</label>
+  <input type="file" id="pano-input" accept="image/jpeg">
+  <p id="pano-status" aria-live="polite"></p>
+  <canvas id="pano-preview" hidden></canvas>
+  <div id="pano-buttons">
+    <button type="button" id="pano-south-btn" disabled>Set south</button>
+    <button type="button" id="pano-sun-btn" disabled>Click the sun</button>
+    <button type="button" id="pano-left" disabled>◀ 1°</button>
+    <button type="button" id="pano-right" disabled>1° ▶</button>
+    <button type="button" id="pano-location-btn" disabled>Use photo's location</button>
+    <button type="button" id="pano-time-btn" disabled>Go to photo's time</button>
+  </div>
+</details>
+```
+
+**`js/postcode.js`**: add `nearestPostcode(lat, lon)`, which fetches `https://api.postcodes.io/postcodes?lon=${lon}&lat=${lat}&limit=1&radius=2000` and returns the first result's `postcode`, or `null` when `result` is `null` or the request fails.
+
+**`js/pano-ui.js`** (new): `export function initPano(state, { onLocation, onTime })`. `onLocation(lat, lon, label)` and `onTime(date)` are callbacks from `main.js`. Inside:
+
+- Module-level: `img` (the decoded photo), `meta`, `southU = 0.5`, `exif`, `photoTime` (a Date or null), `clickMode` (`null`, `'south'` or `'sun'`), and one `strip` canvas of `STRIP_W`×`STRIP_H`.
+- **Loading** (`#pano-input` change):
+  1. Status "Reading the photo…".
+  2. `exif = await exifr.parse(file, { xmp: true, reviveValues: false }).catch(() => null) || {};`. GPS comes back as `exif.latitude` / `exif.longitude`, and the time as the raw string `exif.DateTimeOriginal`. Set `photoTime = exif.DateTimeOriginal ? exifLocalToDate(exif.DateTimeOriginal, exif.OffsetTimeOriginal) : null`.
+  3. Decode it **straight to a smaller size**. The full 72-megapixel image is too big for a canvas, so never draw it at full size. Copy this:
+
+     ```js
+     /** Decode a big photo straight to 4096 px wide, so the full-size image never has to fit on a canvas. */
+     async function decodeSmall(file) {
+       try {
+         return await createImageBitmap(file, { resizeWidth: 4096, resizeQuality: 'high' });
+       } catch (err) {
+         const full = await createImageBitmap(file);
+         const c = document.createElement('canvas');
+         c.width = 4096;
+         c.height = Math.round(4096 * full.height / full.width);
+         c.getContext('2d').drawImage(full, 0, 0, c.width, c.height);
+         full.close();
+         return c;
+       }
+     }
+     ```
+  4. Reject photos that aren't 360°: if `exif.ProjectionType` is set and isn't `'equirectangular'`, or there are no GPano tags (`exif.FullPanoWidthPixels`) and the width isn't 2× the height (±2%), show "This doesn't look like a 360° photo." and stop. If decoding throws, show "Couldn't open that photo (it may be too big for this device)." and stop.
+  5. `meta = panoMeta(exif, img.width, img.height)`, `southU = 0.5`. Enable the buttons: `#pano-sun-btn` and `#pano-time-btn` only when `photoTime` is set and GPS is present, and `#pano-location-btn` only when GPS is present. Show the preview, rebuild the strip, and give a status like "25 Dec 2023, 13:12 at 53.0927° N, 2.4185° W. Use "Set south" or "Click the sun"." (use `formatLatLon`, and leave out what is missing).
+- **Preview** (`#pano-preview`): set `width = clientWidth * devicePixelRatio`, and the height to keep the image's shape. Draw the whole image scaled. Then:
+  - shade the part that won't be used (azimuth 330° → 30°, through north) with `rgba(0,0,0,0.5)`; it is 60° wide and may cross the edge.
+  - draw a red vertical line labelled "S" at `uForAz(southU, 180)`, and thin white lines labelled "E", "W" and "N" at 90°, 270° and 0°.
+  - The image x of an azimuth is `uForAz(southU, az) * meta.fullW - meta.left`; scale it to the preview.
+- **Clicks:**
+  - `#pano-south-btn` sets `clickMode = 'south'` and the status "Click the south point on the photo."
+  - `#pano-sun-btn` sets `clickMode = 'sun'` and the status "Click the middle of the sun on the photo."
+  - On a preview click, turn the click into image pixels (`x * meta.w / rect.width`, and the same for y), then:
+    - **south:** `southU = uAtImageX(meta, x)`.
+    - **sun:** `const sun = sunAltAz(photoTime, exif.latitude, exif.longitude); southU = southFromSun(uAtImageX(meta, x), sun.az);`. Status: "Sun set from the photo's time and place. In the photo it is A° high; it should be B°." with one decimal place, using `altAtImageY(meta, y)` for A. If they differ by more than 2°, add " The photo may not be level."
+    - Then `clickMode = null`, redraw the preview and rebuild the strip.
+  - `#pano-left` / `#pano-right`: `southU` minus/plus `1 / 360`, wrapped into 0–1, then redraw and rebuild.
+  - `#pano-location-btn`: `onLocation(exif.latitude, exif.longitude, (await nearestPostcode(exif.latitude, exif.longitude)) || 'Photo location')`.
+  - `#pano-time-btn`: `onTime(photoTime)`.
+- **Rebuild the strip:** `clearRect` the strip, then for each `r` of `panoCropRects(meta, southU, STRIP_W, STRIP_H)`, `drawImage(img, r.sx, r.sy, r.sw, r.sh, r.dx, r.dy, r.dw, r.dh)`. Then `state.horizonPhoto = strip`.
+
+**`js/main.js`**:
+
+- Add `horizonPhoto: null` to `state`.
+- After the existing setup, call `initPano(state, { onLocation, onTime })` with:
+  - `onLocation(lat, lon, label)`: does what a successful postcode lookup does. Set `state.lat`, `state.lon` and `state.postcode = label`, put `label + ': ' + formatLatLon(lat, lon)` in `#location-result`, then `setMarker` and `updateSunTimes()`.
+  - `onTime(date)`: set `state.simTime = date`, pause (as `setSeason` does), set the time slider to `ukMinuteOfDay(date)`, and call `updateSunTimes()`.
+
+**`js/horizon.js`**: in `drawHorizon`, keep drawing the sky gradient. Then, if `state.horizonPhoto` is set, `ctx.drawImage(state.horizonPhoto, 0, 0, w, h)` over the whole canvas **instead of** the green ground. Where the photo is transparent, the sky gradient shows through. The sun, arcs, ticks and labels are drawn on top as now.
+
+**`style.css`**: `#pano-panel` gets the same spacing as the other sections. `#pano-preview { width: 100%; cursor: crosshair; }`. Add `#pano-panel button` to the `#sun-controls button` rule (and its `:focus-visible` rule) so the panel's buttons look the same.
+
+**Done when**
+
+- [ ] All Step 14 checks still pass.
+- [ ] `node -e "import('./js/postcode.js').then(async m => console.log(await m.nearestPostcode(53.09269, -2.4185108), await m.nearestPostcode(54.0, -4.5)))"` prints `CW1 6BD null` (the second point is in the Irish Sea)
+- [ ] `node -e "const fs = require('fs'), h = fs.readFileSync('index.html', 'utf8'); const ids = ['pano-panel','pano-input','pano-status','pano-preview','pano-south-btn','pano-sun-btn','pano-left','pano-right','pano-location-btn','pano-time-btn']; console.log(ids.filter(i => !h.includes('id=\"' + i + '\"')).join(',') || 'all ids', h.indexOf('vendor/exifr-lite.umd.js') > 0 && h.indexOf('vendor/exifr-lite.umd.js') < h.indexOf('js/main.js'))"` prints `all ids true`
+- [ ] `node -e "const fs = require('fs'), p = fs.readFileSync('js/pano-ui.js', 'utf8'), m = fs.readFileSync('js/main.js', 'utf8'), z = fs.readFileSync('js/horizon.js', 'utf8'); console.log(/export function initPano/.test(p), /resizeWidth:\s*4096/.test(p), /reviveValues:\s*false/.test(p), /panoCropRects\(/.test(p), /southFromSun\(/.test(p), /exifLocalToDate\(/.test(p), /initPano\(\s*state/.test(m), /horizonPhoto:\s*null/.test(m), /state\.horizonPhoto/.test(z))"` prints `true true true true true true true true true`
+- [ ] (browser) Open "Horizon photo" and load a DJI 360° JPEG (~38 MB). Within a few seconds the preview shows the whole panorama, the status gives its date, time and place, and the Console has no errors.
+- [ ] (browser) "Use photo's location", then "Go to photo's time": the marker moves to the photo's place, the clock shows the photo's time, and the result line shows the nearest postcode.
+- [ ] (browser) "Click the sun", then click the brightest part of the sky: the red S line jumps, and the status compares the two heights (for the sample DJI photo, ~13° in the photo against 12.3°). Show the horizon: the photo fills it, its skyline sits on the horizon line, and the drawn sun sits on or very near the photo's sun.
+- [ ] (browser) "Set south" then a click, and the ◀/▶ buttons, move the S line and the horizon photo follows.
+- [ ] (browser) Loading an ordinary (not 360°) photo shows "This doesn't look like a 360° photo." and nothing else changes.
+
+---
+
+## Step 16: Night, remembering the photo, and saving it
+
+**`js/pano.js`**: add `nightAlpha(alt)` → how dark the night overlay is: `Math.min(Math.max(-alt / 12, 0), 1) * 0.8`. That is 0 while the sun is up, deepening through twilight, and 0.8 from 12° below the horizon.
+
+**`js/horizon.js`**, when `state.horizonPhoto` is set:
+
+- Straight after drawing the photo, fill the whole canvas with `` `rgba(6,10,31,${nightAlpha(alt)})` ``, so the photo darkens as the sun goes down.
+- Draw the compass labels (NE, E, …) in white with a dark outline so they show on any photo: `ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,0.7)'; ctx.strokeText(...)`, then `fillText` in white. Without a photo, keep the labels as now.
+- The Step 13a guide colours still follow `alt >= 0`.
+
+**`index.html`**: add two buttons at the end of `#pano-buttons`: `<button type="button" id="pano-save-btn" disabled>Save small image</button>` and `<button type="button" id="pano-clear-btn" disabled>Remove photo</button>`.
+
+**`js/pano-ui.js`**:
+
+- **Remember:** after every rebuild of the strip, wait 500 ms with no further rebuild (reset a `setTimeout` each time), then save the strip to `localStorage['sunworld.horizonPhoto']` as `strip.toDataURL('image/jpeg', 0.85)`, and `localStorage['sunworld.horizonPhotoInfo']` as JSON `{ name, takenAt, lat, lon }` (the file name, `photoTime` as an ISO string or null, and the GPS or null). Wrap **every** `localStorage` read and write in `try { … } catch { … }`. If saving fails, set the status "Couldn't remember the photo (the browser's storage is full or blocked)." and carry on.
+- **On startup** (inside `initPano`): if a saved strip exists, load it with `new Image()`. When it loads, draw it onto `strip`, set `state.horizonPhoto = strip`, enable Save and Remove, and set the status "Using the saved photo: <name>." A saved strip can't be re-aimed (the full photo is gone), so leave the other buttons disabled until a photo is loaded again.
+- **`#pano-save-btn`**: `strip.toBlob(b => { … }, 'image/jpeg', 0.9)` to a temporary `<a download>`. The file name is `horizon-YYYY-MM-DD.jpg`, from `photoTime` in UK time (or today if there is none). Revoke the object URL afterwards.
+- **`#pano-clear-btn`**: `state.horizonPhoto = null`, remove both `localStorage` keys, hide the preview, clear `#pano-input`, disable all the panel buttons, and set the status "Photo removed.".
+- Enable Save and Remove whenever a strip has been built.
+
+**Done when**
+
+- [ ] All Step 14 and 15 checks still pass.
+- [ ] `node -e "import('./js/pano.js').then(m => console.log([10, 0, -3, -6, -12, -30].map(a => m.nightAlpha(a).toFixed(2)).join(' ')))"` prints `0.00 0.00 0.20 0.40 0.80 0.80`
+- [ ] `node -e "const fs = require('fs'), p = fs.readFileSync('js/pano-ui.js', 'utf8'), z = fs.readFileSync('js/horizon.js', 'utf8'), h = fs.readFileSync('index.html', 'utf8'); console.log(p.includes('sunworld.horizonPhoto'), p.includes('sunworld.horizonPhotoInfo'), /toDataURL\(\s*'image\/jpeg',\s*0\.85\s*\)/.test(p), /toBlob\(/.test(p), /try\s*\{/.test(p), z.includes('rgba(6,10,31,'), /nightAlpha\(/.test(z), /strokeText\(/.test(z), h.includes('id=\"pano-save-btn\"'), h.includes('id=\"pano-clear-btn\"'))"` prints `true true true true true true true true true true`
+- [ ] (browser) With a photo loaded, press Play: after sunset the horizon photo darkens to a deep blue over about a minute of simulated twilight, with the sun-path arcs still visible, and lightens again at sunrise.
+- [ ] (browser) The compass labels can be read over the photo.
+- [ ] (browser) Reload the page: the photo is still in the horizon view, and the status says "Using the saved photo: …".
+- [ ] (browser) "Save small image" downloads `horizon-2023-12-25.jpg` (for the sample), about 2400×800 and well under 1 MB.
+- [ ] (browser) "Remove photo": the drawn sky and ground come back, and stay back after a reload.
