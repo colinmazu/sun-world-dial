@@ -3,9 +3,7 @@
 import { formatLatLon } from './geo.js';
 import { sunAltAz } from './geo.js';
 import { nearestPostcode } from './postcode.js';
-import { STRIP_W, STRIP_FULL_H, STRIP_LOW, panoMeta, uForAz, southFromSun, uAtImageX, altAtImageY, panoCropRects, exifLocalToDate } from './pano.js';
-
-const STORAGE_KEY = 'sunWorldDial_pano';
+import { STRIP_W, STRIP_FULL_H, STRIP_LOW, BAND_W, BAND_H, panoMeta, uForAz, southFromSun, uAtImageX, altAtImageY, panoCropRects, exifLocalToDate, panoBandRect, bandExif } from './pano.js';
 
 /** Decode a big photo straight to 4096 px wide, so the full-size image never has to fit on a canvas. */
 async function decodeSmall(file) {
@@ -22,36 +20,6 @@ async function decodeSmall(file) {
   }
 }
 
-/** Save the current photo (base64) and calibration to localStorage. */
-function savePhoto(img, southU, exifData, photoTime) {
-  const c = document.createElement('canvas');
-  c.width = img.width;
-  c.height = img.height;
-  c.getContext('2d').drawImage(img, 0, 0);
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({
-      data: c.toDataURL('image/jpeg', 0.85),
-      southU,
-      exifData,
-      photoTime: photoTime ? photoTime.toISOString() : null,
-    }));
-    return true;
-  } catch {
-    return false; // quota exceeded etc.
-  }
-}
-
-/** Load a saved photo from localStorage and apply it. Returns the data or null. */
-function loadSavedPhoto() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return null;
-    return JSON.parse(raw);
-  } catch {
-    return null;
-  }
-}
-
 /** Initialise the panorama panel. */
 export function initPano(state, { onLocation, onTime }) {
   let img = null;
@@ -60,6 +28,7 @@ export function initPano(state, { onLocation, onTime }) {
   let exifData = null;
   let photoTime = null;
   let clickMode = null;
+  let infoTimer = null;
 
   // Strip canvas for the horizon view
   const strip = document.createElement('canvas');
@@ -79,49 +48,49 @@ export function initPano(state, { onLocation, onTime }) {
   const panoSaveBtn = document.getElementById('pano-save-btn');
   const panoClearBtn = document.getElementById('pano-clear-btn');
 
-  /** Apply loaded data to the panel (from localStorage or file). */
-  async function applyPhoto(imageData, savedSouthU, savedExif, savedTime) {
-    exifData = savedExif || {};
-    photoTime = savedTime ? new Date(savedTime) : null;
-
-    const imageBitmap = await createImageBitmap(
-      await (await fetch(imageData)).blob()
-    );
-    img = await decodeSmallFromBitmap(imageBitmap);
-    meta = panoMeta(exifData, img.width, img.height);
-    southU = savedSouthU ?? 0.5;
-
-    updateButtons();
-    panoPreview.hidden = false;
-    drawPreview();
-    rebuildStrip();
-
-    let statusMsg = '';
-    if (photoTime) {
-      const fmt = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-      statusMsg += fmt.format(photoTime);
+  /** Save the band image to localStorage (once, when a new photo is loaded). */
+  function saveBandImage() {
+    if (!img || !meta) return;
+    const c = document.createElement('canvas');
+    c.width = BAND_W;
+    c.height = BAND_H;
+    const ctx = c.getContext('2d');
+    const rect = panoBandRect(meta);
+    if (rect) {
+      ctx.drawImage(img, rect.sx, rect.sy, rect.sw, rect.sh, rect.dx, rect.dy, rect.dw, rect.dh);
     }
-    const lat = exifData.latitude ?? exifData.lat;
-    const lon = exifData.longitude ?? exifData.lon;
-    if (lat != null && lon != null) {
-      statusMsg += ` at ${formatLatLon(lat, lon)}`;
+    try {
+      localStorage['sunworld.horizonPhoto'] = c.toDataURL('image/jpeg', 0.85);
+    } catch {
+      panoStatus.textContent = "Couldn't remember the photo (the browser's storage is full or blocked).";
     }
-    if (statusMsg) statusMsg += '. ';
-    statusMsg += 'Use "Set south" or "Click the sun".';
-    panoStatus.textContent = statusMsg;
   }
 
-  /** Decode from an ImageBitmap to 4096 px wide. */
-  async function decodeSmallFromBitmap(bitmap) {
+  /** Save calibration info to localStorage (debounced on southU changes). */
+  function saveInfo() {
+    if (!img) return;
+    const info = {
+      name: panoInput.files[0] ? panoInput.files[0].name : '',
+      southU,
+      photoTime: photoTime ? photoTime.toISOString() : null,
+      exif: {
+        latitude: exifData?.latitude ?? exifData?.lat ?? null,
+        longitude: exifData?.longitude ?? exifData?.lon ?? null,
+        DateTimeOriginal: exifData?.DateTimeOriginal ?? null,
+        OffsetTimeOriginal: exifData?.OffsetTimeOriginal ?? null,
+      },
+    };
     try {
-      return await createImageBitmap(bitmap, { resizeWidth: 4096, resizeQuality: 'high' });
+      localStorage['sunworld.horizonPhotoInfo'] = JSON.stringify(info);
     } catch {
-      const c = document.createElement('canvas');
-      c.width = 4096;
-      c.height = Math.round(4096 * bitmap.height / bitmap.width);
-      c.getContext('2d').drawImage(bitmap, 0, 0, c.width, c.height);
-      return c;
+      panoStatus.textContent = "Couldn't remember the photo (the browser's storage is full or blocked).";
     }
+  }
+
+  /** Schedule a debounced save of calibration info. */
+  function scheduleSaveInfo() {
+    clearTimeout(infoTimer);
+    infoTimer = setTimeout(saveInfo, 500);
   }
 
   /** Rebuild the strip from the current image and southU. */
@@ -156,15 +125,12 @@ export function initPano(state, { onLocation, onTime }) {
 
     // The shaded region may cross the image edge
     if (shadeStartU < shadeEndU) {
-      // Single block: from shadeStart to shadeEnd in u-space
       const sx = shadeStartU * meta.fullW - meta.left;
       const sw = (shadeEndU - shadeStartU) * meta.fullW;
       ctx.fillRect(sx / meta.w * pw, 0, sw / meta.w * pw, ph);
     } else {
-      // Two blocks: from shadeStart to right edge, and left edge to shadeEnd
       const sx1 = shadeStartU * meta.fullW - meta.left;
       const sw1 = (1 - shadeStartU) * meta.fullW;
-      const sx2 = 0;
       const sw2 = shadeEndU * meta.fullW;
       ctx.fillRect(sx1 / meta.w * pw, 0, sw1 / meta.w * pw, ph);
       ctx.fillRect(0, 0, sw2 / meta.w * pw, ph);
@@ -234,6 +200,7 @@ export function initPano(state, { onLocation, onTime }) {
     clickMode = null;
     drawPreview();
     rebuildStrip();
+    scheduleSaveInfo();
   }
 
   // --- Event listeners ---
@@ -283,6 +250,9 @@ export function initPano(state, { onLocation, onTime }) {
     meta = panoMeta(exifData, img.width, img.height);
     southU = 0.5;
 
+    // Save the band to localStorage (once)
+    saveBandImage();
+
     // Enable buttons
     updateButtons();
 
@@ -303,6 +273,9 @@ export function initPano(state, { onLocation, onTime }) {
     if (statusMsg) statusMsg += '. ';
     statusMsg += 'Use "Set south" or "Click the sun".';
     panoStatus.textContent = statusMsg;
+
+    // Save calibration info
+    scheduleSaveInfo();
   });
 
   // Preview click handler
@@ -327,12 +300,14 @@ export function initPano(state, { onLocation, onTime }) {
     southU = ((southU - 1 / 360) % 1 + 1) % 1;
     drawPreview();
     rebuildStrip();
+    scheduleSaveInfo();
   });
 
   panoRight.addEventListener('click', () => {
     southU = ((southU + 1 / 360) % 1 + 1) % 1;
     drawPreview();
     rebuildStrip();
+    scheduleSaveInfo();
   });
 
   // Use photo's location button
@@ -351,20 +326,33 @@ export function initPano(state, { onLocation, onTime }) {
     }
   });
 
-  // Save button
+  // Save button: download the strip as a file
   panoSaveBtn.addEventListener('click', () => {
     if (!img) return;
-    const ok = savePhoto(img, southU, exifData, photoTime);
-    if (ok) {
-      panoStatus.textContent = 'Photo saved.';
-    } else {
-      panoStatus.textContent = "Couldn't save — storage full?";
-    }
+    strip.toBlob((b) => {
+      const url = URL.createObjectURL(b);
+      const a = document.createElement('a');
+      let dateStr = new Date().toISOString().slice(0, 10);
+      if (photoTime) {
+        const parts = new Intl.DateTimeFormat('en-GB', {
+          timeZone: 'Europe/London', year: 'numeric', month: '2-digit', day: '2-digit',
+        }).formatToParts(photoTime);
+        const p = t => parts.find(x => x.type === t).value.padStart(2, '0');
+        dateStr = `${p('year')}-${p('month')}-${p('day')}`;
+      }
+      a.href = url;
+      a.download = `horizon-${dateStr}.jpg`;
+      a.click();
+      URL.revokeObjectURL(url);
+      panoStatus.textContent = `Saved horizon-${dateStr}.jpg.`;
+    }, 'image/jpeg', 0.9);
   });
 
-  // Clear button
+  // Clear button: remove photo and all stored data
   panoClearBtn.addEventListener('click', () => {
-    localStorage.removeItem(STORAGE_KEY);
+    try { localStorage.removeItem('sunworld.horizonPhoto'); } catch {}
+    try { localStorage.removeItem('sunworld.horizonPhotoInfo'); } catch {}
+    try { localStorage.removeItem('sunWorldDial_pano'); } catch {}
     img = null;
     meta = null;
     exifData = null;
@@ -372,16 +360,56 @@ export function initPano(state, { onLocation, onTime }) {
     southU = 0.5;
     clickMode = null;
     state.horizonPhoto = null;
+    panoInput.value = '';
     panoPreview.hidden = true;
     updateButtons();
-    panoStatus.textContent = 'Cleared.';
+    panoStatus.textContent = 'Photo removed.';
   });
 
-  // Auto-load saved photo on init
-  const saved = loadSavedPhoto();
-  if (saved) {
-    applyPhoto(saved.data, saved.southU, saved.exifData, saved.photoTime).then(() => {
-      panoStatus.textContent = 'Loaded saved photo.';
-    });
-  }
+  // Auto-load saved band on init
+  (async () => {
+    // Check for old data first
+    try {
+      if (localStorage.getItem('sunWorldDial_pano')) {
+        localStorage.removeItem('sunWorldDial_pano');
+        panoStatus.textContent = 'Please load your photo again (it was stored in an older format).';
+        return;
+      }
+    } catch {}
+
+    // Try loading the band + info
+    let bandData, infoRaw;
+    try {
+      bandData = localStorage['sunworld.horizonPhoto'];
+      infoRaw = localStorage['sunworld.horizonPhotoInfo'];
+    } catch {
+      return;
+    }
+    if (!bandData || !infoRaw) return;
+
+    let info;
+    try {
+      info = JSON.parse(infoRaw);
+    } catch {
+      return;
+    }
+
+    // Load the band image as-is (no resize)
+    const image = new Image();
+    image.onload = async () => {
+      img = image;
+      exifData = { ...info.exif, ...bandExif() };
+      meta = panoMeta(exifData, BAND_W, BAND_H);
+      southU = info.southU;
+      photoTime = info.photoTime ? new Date(info.photoTime) : null;
+
+      updateButtons();
+      panoPreview.hidden = false;
+      drawPreview();
+      rebuildStrip();
+
+      panoStatus.textContent = `Using the saved photo: ${info.name || 'unknown'}.`;
+    };
+    image.src = bandData;
+  })();
 }

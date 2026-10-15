@@ -8,6 +8,10 @@ export const STRIP_H = 800;
 export const STRIP_LOW = -60;
 export const STRIP_FULL_H = 1300;
 
+/** Size of the band kept in storage: 360° wide, from 70° down to STRIP_LOW (130°). */
+export const BAND_W = 3024;
+export const BAND_H = 1092;
+
 /** Compute where the decoded image sits on the full sphere. */
 export function panoMeta(exif, imgW, imgH) {
   if (exif.FullPanoWidthPixels && exif.CroppedAreaImageWidthPixels) {
@@ -146,4 +150,41 @@ export function stripSourceHeight(groundDeg) {
 /** Night darkness factor from sun altitude. */
 export function nightAlpha(alt) {
   return Math.min(Math.max(-alt / 12, 0), 1) * 0.8;
+}
+
+/** Crop rectangle for the stored band (360°, alt +70° to STRIP_LOW). */
+export function panoBandRect(meta) {
+  // Rows: altitude 70° → STRIP_LOW
+  const srcTop = meta.fullH * 20 / 180 - meta.top;
+  const srcBot = meta.fullH * (90 - STRIP_LOW) / 180 - meta.top;
+  const rowSpan = srcBot - srcTop;
+
+  // Clip rows to image bounds using the same helper as panoCropRects
+  const rowClip = clipRange(srcTop, rowSpan, 0, BAND_H, 0, meta.h);
+  if (!rowClip) return null;
+
+  // Columns: the whole image
+  const k = BAND_W / meta.fullW;
+  return {
+    sx: 0,
+    sy: rowClip.s,
+    sw: meta.w,
+    sh: rowClip.span,
+    dx: meta.left * k,
+    dy: rowClip.d,
+    dw: meta.w * k,
+    dh: rowClip.dSpan,
+  };
+}
+
+/** GPano tags describing the stored band so panoMeta reads it back correctly. */
+export function bandExif() {
+  return {
+    FullPanoWidthPixels: BAND_W,
+    FullPanoHeightPixels: BAND_W / 2,
+    CroppedAreaImageWidthPixels: BAND_W,
+    CroppedAreaImageHeightPixels: BAND_H,
+    CroppedAreaLeftPixels: 0,
+    CroppedAreaTopPixels: BAND_W / 2 * 20 / 180,
+  };
 }

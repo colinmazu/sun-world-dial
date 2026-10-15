@@ -1,7 +1,7 @@
 // 2D horizon canvas — no Three.js.
 
 import { sunAltAz, sunPath, sunEvents } from './geo.js';
-import { STRIP_W, uForAz, nightAlpha, stripSourceHeight } from './pano.js';
+import { STRIP_W, nightAlpha, stripSourceHeight } from './pano.js';
 
 /** Convert azimuth/altitude to pixel coordinates on the horizon canvas. */
 export function azAltToXY(az, alt, width, height, bottom = -10) {
