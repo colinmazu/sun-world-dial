@@ -19,6 +19,7 @@ A single web page. You type a UK postcode and see:
 | `js/main.js` | Shared state, the form, the controls, the animation loop |
 | `js/pano.js` | (Step 14) **Pure maths** for 360° photos, like `geo.js`: no DOM, Node must be able to import it |
 | `js/pano-ui.js` | (Step 15) Loading a 360° photo, the preview and the calibration |
+| `js/share.js` | (Step 25) **Pure**: the scene ↔ the URL hash for share links. No DOM; Node must be able to import it |
 
 Already provided. Do not edit them:
 
@@ -482,7 +483,7 @@ The text is "Earth spins" in orbit mode and "Sun orbits" in spin mode (the butto
 
 **Done when**
 
-- [ ] `node -e "import('./js/geo.js').then(m => ['2026-06-21T12:00:00Z','2026-06-21T18:00:00Z','2026-12-21T12:00:00Z','2026-03-20T06:00:00Z'].forEach(s => { const a = m.spinAngles(new Date(s)); console.log(s, a.y.toFixed(3), a.z.toFixed(3)); }))"` prints:
+- [ ] (Step 10 only: Step 11 changes what `spinAngles` returns, so skip this check from Step 11 on) `node -e "import('./js/geo.js').then(m => ['2026-06-21T12:00:00Z','2026-06-21T18:00:00Z','2026-12-21T12:00:00Z','2026-03-20T06:00:00Z'].forEach(s => { const a = m.spinAngles(new Date(s)); console.log(s, a.y.toFixed(3), a.z.toFixed(3)); }))"` prints:
   ```
   2026-06-21T12:00:00Z 1.563 -0.409
   2026-06-21T18:00:00Z 3.133 -0.409
@@ -691,7 +692,7 @@ The globe is square (up to 80vh tall) and the horizon is 3:1, so the page gets m
 **Done when**
 
 - [ ] `node -e "const h = require('fs').readFileSync('js/horizon.js', 'utf8'); console.log(h.includes('rgba(15,30,70,0.7)'), h.includes('rgba(15,30,70,0.9)'), /alt\s*>=\s*0/.test(h), h.includes('rgba(255,255,255,0.35)'))"` prints `true true true false`
-- [ ] `node -e "const c = require('fs').readFileSync('style.css', 'utf8'); console.log(/#sun-controls button\s*\{/.test(c), /#play-btn\s*\{\s*min-width:\s*9ch/.test(c), /#view-toggle,\s*#orbit-spin-btn\s*\{\s*min-width:\s*14ch/.test(c), /min-height:\s*min\(80vh/.test(c), /#play-btn,\s*#view-toggle\s*\{/.test(c))"` prints `true true true true false`
+- [ ] `node -e "const c = require('fs').readFileSync('style.css', 'utf8'); console.log(/#sun-controls button\s*\{/.test(c), /#play-btn\s*\{\s*min-width:\s*9ch/.test(c), /#view-toggle(,\s*#orbit-spin-btn)?\s*\{\s*min-width:\s*14ch/.test(c), /min-height:\s*min\(80vh/.test(c), /#play-btn,\s*#view-toggle\s*\{/.test(c))"` prints `true true true true false`
 - [ ] `node -e "const j = require('fs').readFileSync('js/main.js', 'utf8'); console.log(/function tick\(ts\)\s*\{\s*requestAnimationFrame\(tick\)/.test(j), (j.match(/requestAnimationFrame\(tick\)/g) || []).length, /ukStr/.test(j))"` prints `true 2 false` (one call inside `tick`, one to start it)
 - [ ] All the checks from Steps 1–12 still pass.
 - [ ] (browser, desktop width) Click "Show horizon" and "Show globe" several times: the button stays under the mouse and nothing else in the controls row moves. The same for "Earth spins"/"Sun orbits" and "Play"/"Pause".
@@ -1134,9 +1135,634 @@ The `#horizon` width keeps the whole view on screen: it is the full width unless
 **Done when**
 
 - [ ] All earlier checks still pass.
-- [ ] `node -e "const fs = require('fs'), h = fs.readFileSync('index.html', 'utf8'); const block = re => (h.match(re) || ['', ''])[1]; const top = block(/<header id=\"topbar\">([\s\S]*?)<\/header>/), side = block(/<aside id=\"sidebar\">([\s\S]*?)<\/aside>/), stage = block(/<section id=\"stage\">([\s\S]*?)<\/main>/); const has = (b, ids) => ids.every(i => b.includes('id=\"' + i + '\"')); const ids = [...h.matchAll(/id=\"([^\"]+)\"/g)].map(m => m[1]); console.log(has(top, ['postcode-form', 'location-result', 'sim-clock']), has(side, ['sun-controls', 'date-input', 'time-slider', 'play-btn', 'speed-select', 'midsummer-btn', 'view-toggle', 'orbit-spin-btn', 'pano-panel', 'pano-input', 'ground-slider']), has(stage, ['views', 'globe', 'horizon', 'sun-times', 'pano-preview']), has(side, ['pano-preview']), ids.length === new Set(ids).size, (h.match(/<legend>(Time|Season|View)<\/legend>/g) || []).length)"` prints `true true true false true 3`
+- [ ] `node -e "const fs = require('fs'), h = fs.readFileSync('index.html', 'utf8'); const block = re => (h.match(re) || ['', ''])[1]; const top = block(/<header id=\"topbar\">([\s\S]*?)<\/header>/), side = block(/<aside id=\"sidebar\">([\s\S]*?)<\/aside>/), stage = block(/<section id=\"stage\">([\s\S]*?)<\/main>/); const has = (b, ids) => ids.every(i => b.includes('id=\"' + i + '\"')); const ids = [...h.matchAll(/id=\"([^\"]+)\"/g)].map(m => m[1]); console.log(has(top, ['postcode-form', 'location-result', 'sim-clock']), has(side, ['sun-controls', 'date-input', 'time-slider', 'play-btn', 'speed-select', 'midsummer-btn', 'view-toggle', 'pano-panel', 'pano-input', 'ground-slider']), has(stage, ['views', 'globe', 'horizon', 'sun-times', 'pano-preview']), has(side, ['pano-preview']), ids.length === new Set(ids).size, (h.match(/<legend>(Time|Season|View)<\/legend>/g) || []).length)"` prints `true true true false true 3`
 - [ ] `node -e "const fs = require('fs'), c = fs.readFileSync('style.css', 'utf8'), g = fs.readFileSync('js/globe.js', 'utf8'), m = fs.readFileSync('js/main.js', 'utf8'); console.log(/@media \(min-width:\s*1000px\)/.test(c), /grid-template-columns:\s*280px 1fr/.test(c), /var\(--hr/.test(c), /new ResizeObserver\(\s*resize\s*\)\.observe\(\s*container\s*\)/.test(g), /addEventListener\(\s*'resize'/.test(g), /setProperty\(\s*'--hr'/.test(m))"` prints `true true true true false true`
 - [ ] (browser, wide window) The top bar is one slim row; the controls are in a left column in three labelled groups; the horizon or globe fills the rest of the width, and the whole view fits on screen without scrolling, including with Ground at 60°.
 - [ ] (browser, wide window) Switching globe ↔ horizon doesn't move the sidebar or the top bar, and the globe is round (not stretched) after switching and after resizing the window.
 - [ ] (browser, wide window) With a photo loaded, the preview sits under the view at full width, and clicking it still sets south correctly (the S line lands where you click).
 - [ ] (browser, narrow window under 1000 px, or phone) The page is stacked as before and nothing is cut off.
+
+---
+
+## Step 20: Redraw fixes, two helpers, and keyboard shortcuts
+
+The animation loop now only redraws when something has changed (`markDirty()`). Three things change the picture without marking it, so the view can be blank or stale while paused:
+
+- the "Show horizon" button: the canvas has never been drawn;
+- loading, aiming or clearing the horizon photo in `pano-ui.js`, because `pano-ui.js` can't reach `markDirty`;
+- resizing the window, or the layout switching at 1000 px: the canvas is stretched.
+
+**`js/main.js`**
+
+- Move the flag into `state`: add `dirty: true` to the `state` object and delete `let dirty = true;`. Every `dirty` in the loop becomes `state.dirty`. Put `markDirty` straight after `export { state };`:
+  ```js
+  /** Ask the animation loop to redraw on its next frame. */
+  function markDirty() {
+    state.dirty = true;
+  }
+  ```
+- At the end of the view toggle's click handler, call `markDirty();`.
+- Straight after the view toggle's handler, add:
+  ```js
+  // Redraw when the view area changes size (window resize, layout switch).
+  new ResizeObserver(markDirty).observe(document.getElementById('views'));
+  ```
+- Add two helpers, after the `ukMinuteOfDay` function, and use them **everywhere** the same lines appear now: the Play button, `setSeason`, the time slider, `onTime`, the postcode form and `onLocation`. Afterwards, `playBtn.textContent =` appears only inside `setPlaying`.
+  ```js
+  /** Start or stop playback and update the Play button. */
+  function setPlaying(on) {
+    state.playing = on;
+    playBtn.textContent = on ? 'Pause' : 'Play';
+  }
+
+  /** Show a new place: state, the location line, the marker and the sun times. */
+  function setLocation(lat, lon, label) {
+    state.lat = lat;
+    state.lon = lon;
+    state.postcode = label;
+    result.textContent = label + ': ' + formatLatLon(lat, lon);
+    setMarker(lat, lon);
+    updateSunTimes();
+    markDirty();
+  }
+  ```
+  The form's success branch becomes `setLocation(loc.lat, loc.lon, loc.postcode);` and `onLocation` becomes `setLocation(lat, lon, label);`.
+- Keyboard shortcuts, at the end of the file (import `keyAction` from `./geo.js`):
+  ```js
+  // --- Keyboard shortcuts ---
+  document.addEventListener('keydown', (e) => {
+    if (e.ctrlKey || e.altKey || e.metaKey) return;
+    const t = e.target;
+    if (t.closest && t.closest('input, select, textarea, [contenteditable]')) return;
+    const act = keyAction(e.key);
+    if (!act) return;
+    if (act.toggle && t.closest && t.closest('button, summary')) return; // Space already clicks a focused button
+    e.preventDefault();
+    if (act.toggle) {
+      setPlaying(!state.playing);
+      return;
+    }
+    setPlaying(false);
+    const ms = act.minutes ? act.minutes * 60000 : act.days * 86400000;
+    state.simTime = new Date(state.simTime.getTime() + ms);
+    timeSlider.value = ukMinuteOfDay(state.simTime);
+    updateSunTimes();
+    markDirty();
+  });
+  ```
+
+**`js/pano-ui.js`**: wherever it sets `state.horizonPhoto` (in `rebuildStrip` and in the Clear handler), add `state.dirty = true;` on the next line.
+
+**`js/geo.js`**: add
+
+```js
+/** What a keyboard key does: { toggle: true }, { minutes: n }, { days: n }, or null. */
+export function keyAction(key) {
+  if (key === ' ') return { toggle: true };
+  if (key === 'ArrowLeft') return { minutes: -10 };
+  if (key === 'ArrowRight') return { minutes: 10 };
+  if (key === 'ArrowUp') return { days: 1 };
+  if (key === 'ArrowDown') return { days: -1 };
+  return null;
+}
+```
+
+**`index.html`**: last thing inside the Time fieldset (after `#speed-select`): `<p id="key-hint">Keys: Space play · ← → 10 min · ↑ ↓ 1 day</p>`.
+
+**Done when**
+
+- [ ] All earlier checks still pass.
+- [ ] `node -e "import('./js/geo.js').then(m => console.log(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', ' ', 'a'].map(k => JSON.stringify(m.keyAction(k))).join(' ')))"` prints `{"minutes":-10} {"minutes":10} {"days":1} {"days":-1} {"toggle":true} null`
+- [ ] `node -e "const fs = require('fs'), m = fs.readFileSync('js/main.js', 'utf8'), p = fs.readFileSync('js/pano-ui.js', 'utf8'), h = fs.readFileSync('index.html', 'utf8'); console.log(/let dirty/.test(m), /state\.dirty = true/.test(p), /new ResizeObserver\(\s*markDirty\s*\)\.observe\(\s*document\.getElementById\('views'\)\s*\)/.test(m), /function setPlaying\(on\)/.test(m), /function setLocation\(lat, lon, label\)/.test(m), (m.match(/playBtn\.textContent =/g) || []).length, /addEventListener\('keydown'/.test(m), h.includes('id=\"key-hint\"'))"` prints `false true true true true 1 true true`
+- [ ] (browser) Paused, with a postcode set: "Show horizon" draws the view straight away. Loading a photo, ◀ / ▶ and Clear show up straight away too. Resizing the window redraws the horizon sharply.
+- [ ] (browser) Space plays and pauses (also after clicking on the view). ← / → move 10 minutes, ↑ / ↓ a day; the slider, the clock, the date and the view all follow. Typing a postcode with spaces does not start playback.
+
+---
+
+## Step 21: "Use my location"
+
+**`index.html`**: in `#postcode-form`, straight after the "Find me" button: `<button type="button" id="locate-btn">Use my location</button>`.
+
+**`js/main.js`**: import `nearestPostcode` from `./postcode.js` as well, and add after the postcode form code:
+
+```js
+// --- Use my location ---
+const locateBtn = document.getElementById('locate-btn');
+if (!('geolocation' in navigator)) locateBtn.hidden = true;
+
+locateBtn.addEventListener('click', () => {
+  result.textContent = 'Finding you…';
+  locateBtn.disabled = true;
+  navigator.geolocation.getCurrentPosition(
+    async (pos) => {
+      const { latitude, longitude } = pos.coords;
+      const label = (await nearestPostcode(latitude, longitude)) ?? 'Your location';
+      setLocation(latitude, longitude, label);
+      locateBtn.disabled = false;
+    },
+    (err) => {
+      result.textContent = err.code === 1
+        ? 'Location permission was refused.'
+        : "Couldn't get your location.";
+      locateBtn.disabled = false;
+    },
+    { enableHighAccuracy: false, timeout: 10000, maximumAge: 600000 },
+  );
+});
+```
+
+The browser only allows this on `localhost` or `https` (GitHub Pages is fine). Outside the UK there's no postcode, so the label is "Your location"; everything else still works.
+
+**Done when**
+
+- [ ] All earlier checks still pass.
+- [ ] `node -e "const fs = require('fs'), m = fs.readFileSync('js/main.js', 'utf8'), h = fs.readFileSync('index.html', 'utf8'); console.log(/<button type=\"button\" id=\"locate-btn\">Use my location<\/button>/.test(h), /getCurrentPosition\(/.test(m), /nearestPostcode\(/.test(m), /'Your location'/.test(m), /Location permission was refused\./.test(m), /maximumAge:\s*600000/.test(m))"` prints `true true true true true true`
+- [ ] (browser) "Use my location" asks for permission; Allow → the location line shows your nearest postcode and the marker moves. Block (reset it in the address bar's site settings) → "Location permission was refused."
+
+---
+
+## Step 22: Golden hour and twilight on the horizon view
+
+Today's sun path is drawn down to 18° below the horizon, in colours that show the phases of the day: golden hour (sun 0–6° up), civil twilight (0–6° down), nautical (6–12° down) and astronomical (12–18° down). With Ground at 30° or more you see the whole dusk. Under the sunrise line, a line of times.
+
+This step also fixes an old bug: in northern Scotland around midsummer the sun never gets 10° below the horizon, so the 21 Jun path is a whole day long and its line jumps across the bottom of the view when it passes north.
+
+**`js/geo.js`**
+
+- `sunPath` gets a fourth parameter with a default, so every existing call keeps its result: `export function sunPath(date, lat, lon, minAlt = -10)`, and inside, `if (p.alt > -10)` becomes `if (p.alt > minAlt)`.
+- Add:
+  ```js
+  /** The twilight phase for a sun altitude in degrees. */
+  export function twilightPhase(alt) {
+    if (alt >= 6) return 'day';
+    if (alt >= 0) return 'golden';
+    if (alt >= -6) return 'civil';
+    if (alt >= -12) return 'nautical';
+    if (alt >= -18) return 'astro';
+    return 'night';
+  }
+
+  /** Morning and evening twilight times for the UK day of `date` (Dates; Invalid Date if it never happens). */
+  export function twilightTimes(date, lat, lon) {
+    const t = globalThis.SunCalc.getTimes(ukNoon(date), lat, lon);
+    return {
+      nightEnd: t.nightEnd, goldenHourEnd: t.goldenHourEnd, sunrise: t.sunrise,
+      sunset: t.sunset, goldenHour: t.goldenHour, night: t.night,
+    };
+  }
+
+  /** 12:00 UK time on the UK calendar day of `date`. */
+  function ukNoon(date) {
+    const p = new Intl.DateTimeFormat('en-GB', {
+      timeZone: 'Europe/London', year: 'numeric', month: 'numeric', day: 'numeric',
+    }).formatToParts(date);
+    const n = t => Number(p.find(x => x.type === t).value);
+    return new Date(Date.UTC(n('year'), n('month') - 1, n('day'), 12));
+  }
+  ```
+
+**`js/horizon.js`**
+
+- Import `twilightPhase` from `./geo.js`. Add after the imports:
+  ```js
+  /** Path colours for each twilight phase. */
+  export const PHASE_COLOURS = {
+    day: '#ffd23f', golden: '#ff9a3c', civil: '#e86fa0', nautical: '#7a6fe0', astro: '#3a4aa8',
+  };
+  ```
+- In `drawPathLine`, don't join two points either side of north (the line would cross the whole view). Inside the loop, replace `ctx.lineTo(p.x, p.y);` with:
+  ```js
+  if (Math.abs(points[i].az - points[i - 1].az) > 180) ctx.moveTo(p.x, p.y); // past north: don't join across the view
+  else ctx.lineTo(p.x, p.y);
+  ```
+- Replace the whole "Current day path" block (the `todayPath` line, the dark edge drawn `if (day)`, and the yellow line) with:
+  ```js
+  // Today's path, down to -18°, in pieces coloured by twilight phase, each with a dark edge for contrast
+  const todayPath = sunPath(state.simTime, state.lat, state.lon, -18);
+  const pieces = [];
+  for (let i = 1; i < todayPath.length; i++) {
+    const a = todayPath[i - 1], b = todayPath[i];
+    pieces.push({ a, b, phase: twilightPhase((a.alt + b.alt) / 2) });
+  }
+  ctx.lineCap = 'round';
+  for (const p of pieces) drawPathLine([p.a, p.b], 'rgba(15,30,70,0.6)', 5, false);
+  for (const p of pieces) drawPathLine([p.a, p.b], PHASE_COLOURS[p.phase], p.phase === 'day' ? 2 : 3, false);
+  ctx.lineCap = 'butt';
+
+  // Legend, top left
+  ctx.font = '11px system-ui, sans-serif';
+  ctx.textAlign = 'left';
+  const legend = [['golden', 'Golden hour'], ['civil', 'Civil twilight'], ['nautical', 'Nautical'], ['astro', 'Astronomical']];
+  legend.forEach(([phase, text], i) => {
+    ctx.fillStyle = PHASE_COLOURS[phase];
+    ctx.fillRect(8, 8 + i * 15, 14, 4);
+    ctx.fillStyle = guideText;
+    ctx.fillText(text, 26, 13 + i * 15);
+  });
+  ctx.textAlign = 'center';
+  ```
+  The `day`, `guide` and `guideText` colours (Step 13) stay as they are.
+
+**`index.html`**: straight after `<p id="sun-times"></p>`, add `<p id="twilight-times"></p>`.
+
+**`js/main.js`**: import `twilightTimes` from `./geo.js`. Add after `updateSunTimes`:
+
+```js
+const twilightEl = document.getElementById('twilight-times');
+
+/** A UK hh:mm, or "—" for a missing or Invalid Date. */
+function hhmm(d) {
+  return d && !isNaN(d) ? ukTimeFmt.format(d) : '—';
+}
+
+/** "Morning: dark until 06:12 · golden hour 08:22–09:29 · Evening: golden hour 14:48–15:55 · dark from 18:05" */
+function twilightText(date, lat, lon) {
+  const t = twilightTimes(date, lat, lon);
+  const neverDark = isNaN(t.night) && isNaN(t.nightEnd);
+  return 'Morning: ' + (neverDark ? '' : `dark until ${hhmm(t.nightEnd)} · `) +
+    `golden hour ${hhmm(t.sunrise)}–${hhmm(t.goldenHourEnd)} · ` +
+    `Evening: golden hour ${hhmm(t.goldenHour)}–${hhmm(t.sunset)} · ` +
+    (neverDark ? 'never fully dark' : `dark from ${hhmm(t.night)}`);
+}
+```
+
+and as the last line of `updateSunTimes`: `twilightEl.textContent = twilightText(state.simTime, state.lat, state.lon);`.
+
+**Done when**
+
+- [ ] All earlier checks still pass (the `sunPath` checks from Step 6 print the same as before).
+- [ ] `node -e "import('./js/geo.js').then(m => console.log([6, 5.9, 0, -0.1, -6, -6.1, -12, -12.1, -18, -18.1].map(m.twilightPhase).join(' ')))"` prints `day golden golden civil civil nautical nautical astro astro night`
+- [ ] `node -e "globalThis.SunCalc = require('./vendor/suncalc.js'); import('./js/geo.js').then(m => { const d = new Date('2025-12-21T12:00:00Z'); console.log(m.sunPath(d, 53.0927, -2.4185).length, m.sunPath(d, 53.0927, -2.4185, -18).length); const f = x => isNaN(x) ? 'Invalid' : x.toLocaleTimeString('en-GB', { timeZone: 'Europe/London', hour: '2-digit', minute: '2-digit' }); for (const [day, lat, lon] of [['2025-12-21', 53.0927, -2.4185], ['2026-06-21', 57.48, -4.22]]) { const t = m.twilightTimes(new Date(day + 'T12:00:00Z'), lat, lon); console.log(day, ['nightEnd', 'sunrise', 'goldenHourEnd', 'goldenHour', 'sunset', 'night'].map(k => f(t[k])).join(' ')); } })"` prints:
+  ```
+  60 71
+  2025-12-21 06:12 08:22 09:29 14:48 15:55 18:05
+  2026-06-21 Invalid 04:19 05:28 21:11 22:20 Invalid
+  ```
+- [ ] `node -e "const z = require('fs').readFileSync('js/horizon.js', 'utf8'); console.log(/export const PHASE_COLOURS/.test(z), ['#ff9a3c', '#e86fa0', '#7a6fe0', '#3a4aa8'].every(c => z.includes(c)), /sunPath\(state\.simTime, state\.lat, state\.lon, -18\)/.test(z), /Math\.abs\(points\[i\]\.az - points\[i - 1\]\.az\) > 180/.test(z))"` prints `true true true true`
+- [ ] (browser) CW1 6BD, 21 Dec, 15:30, Ground 30°: the path is yellow while the sun is high, orange for the last stretch to the horizon, then pink, purple and dark blue below it. The legend is in the top left. The times line reads "Morning: dark until 06:12 · golden hour 08:22–09:29 · Evening: golden hour 14:48–15:55 · dark from 18:05".
+- [ ] (browser) IV1 1AA (Inverness), Midsummer: no line across the bottom of the view, and the times line ends "never fully dark".
+
+---
+
+## Step 23: The Moon
+
+The Moon appears in the horizon view at its real position, with the right amount lit and its lit side facing the sun. A line of text gives how much is lit and the moonrise and moonset times.
+
+**`js/geo.js`**: add (`ukNoon` is from Step 22):
+
+```js
+/** The Moon's altitude and azimuth in degrees (same convention as sunAltAz), and the bright limb's angle
+    in radians, measured from straight up, anticlockwise as you look at the sky. */
+export function moonAltAz(date, lat, lon) {
+  const p = globalThis.SunCalc.getMoonPosition(date, lat, lon);
+  const i = globalThis.SunCalc.getMoonIllumination(date);
+  return {
+    alt: p.altitude * 180 / Math.PI,
+    az: (p.azimuth * 180 / Math.PI + 180 + 360) % 360,
+    limb: i.angle - p.parallacticAngle,
+  };
+}
+
+/** How much of the Moon is lit (0..1) and whether it is waxing. */
+export function moonInfo(date) {
+  const i = globalThis.SunCalc.getMoonIllumination(date);
+  return { fraction: i.fraction, waxing: i.phase < 0.5 };
+}
+
+/** Moonrise and moonset on the UK day of `date` (null if there isn't one that day). */
+export function moonTimes(date, lat, lon) {
+  const noon = ukNoon(date);
+  const offsetHours = Number(new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Europe/London', hour: 'numeric', hour12: false,
+  }).format(noon)) - 12;
+  const midnight = new Date(noon.getTime() - (12 + offsetHours) * 3600000); // 00:00 UK time
+  const t = globalThis.SunCalc.getMoonTimes(midnight, lat, lon, true);
+  return { rise: t.rise || null, set: t.set || null, alwaysUp: !!t.alwaysUp, alwaysDown: !!t.alwaysDown };
+}
+```
+
+**`js/horizon.js`**: import `moonAltAz` and `moonInfo` from `./geo.js`. Add this function exactly (after `PHASE_COLOURS`):
+
+```js
+/** Draw the Moon at (x, y) with radius r: `fraction` of it lit, the lit side turned by `limb` (from moonAltAz). */
+export function drawMoon(ctx, x, y, r, fraction, limb) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(-limb - Math.PI / 2); // now the lit side faces +x
+  ctx.beginPath();
+  ctx.arc(0, 0, r, 0, Math.PI * 2);
+  ctx.fillStyle = '#3a3f4a';
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+  const k = 1 - 2 * fraction; // 1 new, 0 half, -1 full
+  ctx.beginPath();
+  ctx.arc(0, 0, r, -Math.PI / 2, Math.PI / 2);                               // the lit edge, top to bottom
+  ctx.ellipse(0, 0, r * Math.abs(k), r, 0, Math.PI / 2, -Math.PI / 2, k > 0); // the terminator, back to the top
+  ctx.fillStyle = '#f4f1e0';
+  ctx.fill();
+  ctx.restore();
+}
+```
+
+In `drawHorizon`, straight before the `// Sun` block at the end:
+
+```js
+  // Moon
+  const moon = moonAltAz(state.simTime, state.lat, state.lon);
+  if (moon.alt > bottom) {
+    const mp = azAltToXY(moon.az, moon.alt, w, h, bottom);
+    drawMoon(ctx, mp.x, mp.y, 10, moonInfo(state.simTime).fraction, moon.limb);
+  }
+```
+
+**`index.html`**: straight after `<p id="twilight-times"></p>`, add `<p id="moon-times"></p>`.
+
+**`js/main.js`**: import `moonInfo` and `moonTimes` from `./geo.js`. Add after `twilightText`:
+
+```js
+const moonEl = document.getElementById('moon-times');
+
+/** "Moon 63% lit, waxing · Moonrise 14:02 · Moonset 03:15" */
+function moonText(date, lat, lon) {
+  const i = moonInfo(date);
+  const t = moonTimes(date, lat, lon);
+  const lit = `Moon ${Math.round(i.fraction * 100)}% lit, ${i.waxing ? 'waxing' : 'waning'}`;
+  if (t.alwaysUp) return lit + ' · up all day';
+  if (t.alwaysDown) return lit + ' · down all day';
+  return lit + ` · Moonrise ${hhmm(t.rise)} · Moonset ${hhmm(t.set)}`;
+}
+```
+
+and as the last line of `updateSunTimes`: `moonEl.textContent = moonText(state.simTime, state.lat, state.lon);`.
+
+**Done when**
+
+- [ ] All earlier checks still pass.
+- [ ] `node -e "globalThis.SunCalc = require('./vendor/suncalc.js'); import('./js/geo.js').then(m => { for (const s of ['2026-01-21T16:30:00Z', '2026-02-07T08:30:00Z']) { const d = new Date(s), p = m.moonAltAz(d, 53.0927, -2.4185), i = m.moonInfo(d), t = m.moonTimes(d, 53.0927, -2.4185); const f = x => x ? x.toLocaleTimeString('en-GB', { timeZone: 'Europe/London', hour: '2-digit', minute: '2-digit' }) : '-'; console.log(s, p.alt.toFixed(1), p.az.toFixed(1), (-Math.sin(p.limb)).toFixed(2), (-Math.cos(p.limb)).toFixed(2), i.fraction.toFixed(2), i.waxing, f(t.rise), f(t.set)); } })"` prints:
+  ```
+  2026-01-21T16:30:00Z 22.2 211.5 0.77 0.64 0.08 true 09:21 19:51
+  2026-02-07T08:30:00Z 6.7 238.7 -0.99 -0.15 0.70 false - 09:20
+  ```
+  (The two numbers after the azimuth are the screen direction of the lit side: down-right towards the setting sun in January, left towards the rising sun in February.)
+- [ ] `node -e "const fs = require('fs'), z = fs.readFileSync('js/horizon.js', 'utf8'), h = fs.readFileSync('index.html', 'utf8'); const call = z.indexOf('drawMoon(ctx, mp.x, mp.y, 10, moonInfo(state.simTime).fraction, moon.limb)'); console.log(/export function drawMoon\(ctx, x, y, r, fraction, limb\)/.test(z), /ctx\.rotate\(-limb - Math\.PI \/ 2\)/.test(z), /k > 0\);/.test(z), call > 0 && call < z.lastIndexOf('// Sun'), h.includes('id=\"twilight-times\"'), h.includes('id=\"moon-times\"'))"` prints `true true true true true true`
+- [ ] (browser) CW1 6BD, 21 Jan 2026, 16:30: a thin crescent at about 22° up in the south-west, lit on its lower right (towards the sun, which has just set). The text says "Moon 8% lit, waxing · Moonrise 09:21 · Moonset 19:51".
+- [ ] (browser) 7 Feb 2026, 08:30: a fat Moon (70%) low in the south-west, lit on its left, towards the sun rising in the south-east.
+
+---
+
+## Step 24: Three globe views, including "Sun in the middle"
+
+The single Orbit/Spin button becomes three buttons, and the third view is new: the Sun at the centre, the Earth going round it once a year with its axis always leaning the same way in space. With "1 year in 60 s" you see the seasons happen. In June the north pole leans towards the Sun, and in December, from the other side of the orbit, away from it.
+
+**`index.html`**: replace `<button id="orbit-spin-btn" type="button">Earth spins</button>` with:
+
+```html
+<div id="view-mode" role="group" aria-label="Globe view">
+  <button type="button" id="mode-orbit" aria-pressed="true">Sun orbits</button>
+  <button type="button" id="mode-spin" aria-pressed="false">Earth spins</button>
+  <button type="button" id="mode-sun" aria-pressed="false">Sun in middle</button>
+</div>
+```
+
+**`style.css`**: change `#view-toggle, #orbit-spin-btn { min-width: 14ch; }` to `#view-toggle { min-width: 14ch; }`, and add:
+
+```css
+#view-mode { display: flex; flex-wrap: wrap; gap: 0.25rem; }
+#view-mode button[aria-pressed="true"] { background: #ffd23f; color: #1a1a1a; border-color: #c9a400; }
+```
+
+**`js/main.js`**: replace the whole Orbit/Spin toggle block (`orbitSpinBtn` and its click handler) with:
+
+```js
+// Globe view: three buttons, one pressed
+const modeButtons = {
+  orbit: document.getElementById('mode-orbit'),
+  spin: document.getElementById('mode-spin'),
+  sun: document.getElementById('mode-sun'),
+};
+
+/** Switch the globe to 'orbit', 'spin' or 'sun' and show which button is pressed. */
+function setMode(m) {
+  setGlobeMode(m);
+  for (const [k, b] of Object.entries(modeButtons)) b.setAttribute('aria-pressed', String(k === m));
+  markDirty();
+}
+
+for (const [k, b] of Object.entries(modeButtons)) b.addEventListener('click', () => setMode(k));
+```
+
+**`js/geo.js`**: add
+
+```js
+/** Where the Earth sits on its orbit in the "Sun in the middle" view: the Sun at the origin, the lean fixed. */
+export function orbitPosition(date, radius) {
+  const y = spinAngles(date).year;
+  return { x: -radius * Math.cos(y), y: 0, z: -radius * Math.sin(y) };
+}
+```
+
+This is the "Earth spins" view seen from the stars. There, `yearGroup` turns the lean against a fixed Sun. Here the lean stays put (`yearGroup` isn't rotated), and the Earth moves to where the Sun is in the same direction from it.
+
+**`js/globe.js`**
+
+- Import `orbitPosition`. Add module variables `let controls = null;` and `let orbitRing = null;`, and change `const controls = new OrbitControls(` to `controls = new OrbitControls(`.
+- Straight after `sunLight = new THREE.DirectionalLight(0xffffff, 3);`, add `sunLight.target = yearGroup; // always light the Earth, wherever it is`.
+- After `scene.add(sunMesh);`, add the orbit ring:
+  ```js
+  // The Earth's orbit (only in the "Sun in the middle" view)
+  const ringPts = [];
+  for (let i = 0; i <= 128; i++) {
+    const a = i / 128 * Math.PI * 2;
+    ringPts.push(new THREE.Vector3(4 * Math.cos(a), 0, 4 * Math.sin(a)));
+  }
+  orbitRing = new THREE.Line(
+    new THREE.BufferGeometry().setFromPoints(ringPts),
+    new THREE.LineBasicMaterial({ color: 0x666666 })
+  );
+  orbitRing.visible = false;
+  scene.add(orbitRing);
+  ```
+- At the start of `updateGlobe`, reset what the new view changes, then add the new view as the first branch:
+  ```js
+  yearGroup.position.set(0, 0, 0);
+  yearGroup.scale.setScalar(1);
+  sunMesh.scale.setScalar(1);
+  orbitRing.visible = false;
+  if (mode === 'sun') {
+    const a = spinAngles(state.simTime);
+    const p = orbitPosition(state.simTime, 4);
+    yearGroup.rotation.set(0, 0, 0);
+    yearGroup.position.set(p.x, p.y, p.z);
+    yearGroup.scale.setScalar(0.5);
+    tiltGroup.rotation.set(0, 0, a.tilt);
+    globeGroup.rotation.set(0, a.spin, 0);
+    axisLine.visible = true;
+    sunMesh.position.set(0, 0, 0);
+    sunMesh.scale.setScalar(5);
+    sunLight.position.set(0, 0, 0);
+    orbitRing.visible = true;
+  } else if (mode === 'orbit') {
+  ```
+  (the existing `orbit` and `spin` branches follow unchanged).
+- `setGlobeMode` moves the camera out for the new view and back again:
+  ```js
+  /** Switch between the "orbit", "spin" and "sun" views. */
+  export function setGlobeMode(m) {
+    if (m === mode) return;
+    if (m === 'sun') {
+      controls.maxDistance = 20;
+      camera.position.set(0, 7, 9);
+    } else if (mode === 'sun') {
+      camera.position.set(0, 0, 3.2);
+      controls.maxDistance = 6;
+    }
+    mode = m;
+  }
+  ```
+
+**Done when**
+
+- [ ] All earlier checks still pass.
+- [ ] `node -e "globalThis.SunCalc = require('./vendor/suncalc.js'); import('./js/geo.js').then(m => ['2026-03-20', '2026-06-21', '2026-09-23', '2026-12-21'].forEach(d => { const p = m.orbitPosition(new Date(d + 'T12:00:00Z'), 4); console.log(d, p.x.toFixed(1), p.y.toFixed(1), p.z.toFixed(1)); }))"` prints (`-0.0` instead of `0.0` is fine):
+  ```
+  2026-03-20 0.0 0.0 -4.0
+  2026-06-21 -4.0 0.0 0.0
+  2026-09-23 0.0 0.0 4.0
+  2026-12-21 4.0 0.0 0.0
+  ```
+- [ ] `node -e "const fs = require('fs'), h = fs.readFileSync('index.html', 'utf8'), g = fs.readFileSync('js/globe.js', 'utf8'), c = fs.readFileSync('style.css', 'utf8'); console.log(h.includes('orbit-spin-btn'), ['mode-orbit', 'mode-spin', 'mode-sun'].every(i => h.includes('id=\"' + i + '\"')), (h.match(/aria-pressed=\"true\"/g) || []).length, /sunLight\.target = yearGroup/.test(g), /mode === 'sun'/.test(g), /controls\.maxDistance = 20/.test(g), /aria-pressed=\"true\"\]/.test(c))"` prints `false true 1 true true true true`
+- [ ] (browser) The three buttons sit under "Show globe"; the pressed one is yellow. "Sun orbits" and "Earth spins" look as before.
+- [ ] (browser) "Sun in middle", Midsummer: the Earth is on the left of the Sun, its axis leaning towards it, the north pole lit. Midwinter: it's on the right, leaning away, the north pole dark. "1 year in 60 s" + Play: it goes round anticlockwise as seen from above, and the axis keeps pointing the same way.
+- [ ] (browser) Back to "Sun orbits": the camera is close again and you can't zoom out past the old limit.
+
+---
+
+## Step 25: Share link
+
+The address bar always holds the scene (place, date and time, globe or horizon, and which globe view), so copying it, or pressing "Copy link", gives a link that opens the same view. The horizon photo isn't included: it's far too big for a link and stays in the browser that loaded it.
+
+**`js/share.js`** (new, exactly):
+
+```js
+// Share link: the scene as a URL hash, and back. Pure: no DOM.
+
+/** Turn the scene into a hash like "#lat=53.0927&lon=-2.4185&place=CW1+6BD&t=2023-12-25T13%3A12Z&view=horizon&mode=orbit". */
+export function encodeShare({ lat, lon, place, time, view, mode }) {
+  const p = new URLSearchParams();
+  if (lat !== null && lon !== null) {
+    p.set('lat', lat.toFixed(4));
+    p.set('lon', lon.toFixed(4));
+    if (place) p.set('place', place);
+  }
+  p.set('t', time.toISOString().slice(0, 16) + 'Z');
+  p.set('view', view);
+  p.set('mode', mode);
+  return '#' + p.toString();
+}
+
+/** Read a hash back. Only valid fields are returned; anything missing or wrong is left out. */
+export function decodeShare(hash) {
+  const p = new URLSearchParams(hash.replace(/^#/, ''));
+  const out = {};
+  const lat = Number(p.get('lat')), lon = Number(p.get('lon'));
+  if (p.has('lat') && p.has('lon') && Math.abs(lat) <= 90 && Math.abs(lon) <= 180) {
+    out.lat = lat;
+    out.lon = lon;
+    out.place = p.get('place') || 'Shared place';
+  }
+  const t = new Date(p.get('t'));
+  if (p.has('t') && !isNaN(t)) out.time = t;
+  if (['globe', 'horizon'].includes(p.get('view'))) out.view = p.get('view');
+  if (['orbit', 'spin', 'sun'].includes(p.get('mode'))) out.mode = p.get('mode');
+  return out;
+}
+```
+
+**`index.html`**: in `#topbar`, after `#sim-clock`: `<button type="button" id="share-btn">Copy link</button>`.
+
+**`js/main.js`**
+
+- Import `encodeShare` and `decodeShare` from `./share.js`.
+- Replace the view toggle's handler with a `setView` function, so the share link can use it too:
+  ```js
+  /** Show 'globe' or 'horizon'. */
+  function setView(v) {
+    const horizon = v === 'horizon';
+    horizonCanvas.hidden = !horizon;
+    globeDiv.hidden = horizon;
+    viewToggle.textContent = horizon ? 'Show globe' : 'Show horizon';
+    markDirty();
+  }
+
+  // View toggle: switch between globe and horizon
+  viewToggle.addEventListener('click', () => setView(horizonCanvas.hidden ? 'horizon' : 'globe'));
+  ```
+- In `tick`, straight after `state.dirty = false;`, add `if (!state.playing) scheduleShareUpdate();`. While playing, the address bar is left alone; it catches up as soon as you pause.
+- At the end of the file:
+  ```js
+  // --- Share link ---
+  const shareBtn = document.getElementById('share-btn');
+  let shareTimer = null;
+
+  /** Put the current scene into the address bar (without adding to the history). */
+  function writeShareHash() {
+    const hash = encodeShare({
+      lat: state.lat, lon: state.lon, place: state.postcode, time: state.simTime,
+      view: horizonCanvas.hidden ? 'globe' : 'horizon', mode: getGlobeMode(),
+    });
+    if (location.hash !== hash) history.replaceState(null, '', hash);
+  }
+
+  /** Write the hash 300 ms after the last change, so dragging a slider doesn't write it 60 times a second. */
+  function scheduleShareUpdate() {
+    clearTimeout(shareTimer);
+    shareTimer = setTimeout(writeShareHash, 300);
+  }
+
+  shareBtn.addEventListener('click', async () => {
+    writeShareHash();
+    try {
+      await navigator.clipboard.writeText(location.href);
+      shareBtn.textContent = 'Copied';
+    } catch {
+      shareBtn.textContent = 'Copy the address bar';
+    }
+    setTimeout(() => { shareBtn.textContent = 'Copy link'; }, 1500);
+  });
+
+  // Open a shared link: apply whatever the hash holds.
+  const shared = decodeShare(location.hash);
+  if (shared.lat !== undefined) setLocation(shared.lat, shared.lon, shared.place);
+  if (shared.time) {
+    state.simTime = shared.time;
+    timeSlider.value = ukMinuteOfDay(shared.time);
+    updateSunTimes();
+  }
+  if (shared.view) setView(shared.view);
+  if (shared.mode) setMode(shared.mode);
+  markDirty();
+  ```
+
+Use `history.replaceState`, never `pushState` or `location.hash =`: every change would otherwise add a Back-button step.
+
+**Done when**
+
+- [ ] All earlier checks still pass.
+- [ ] `node -e "import('./js/share.js').then(m => { const h = m.encodeShare({ lat: 53.09271, lon: -2.41853, place: 'CW1 6BD', time: new Date('2023-12-25T13:12:42Z'), view: 'horizon', mode: 'sun' }); console.log(h); console.log(JSON.stringify(m.decodeShare(h))); console.log(JSON.stringify(m.decodeShare('#lat=95&lon=0&t=nope&view=side&mode=sun')), JSON.stringify(m.decodeShare(''))); console.log(m.encodeShare({ lat: null, lon: null, place: null, time: new Date('2026-06-21T11:00:00Z'), view: 'globe', mode: 'orbit' })); })"` prints:
+  ```
+  #lat=53.0927&lon=-2.4185&place=CW1+6BD&t=2023-12-25T13%3A12Z&view=horizon&mode=sun
+  {"lat":53.0927,"lon":-2.4185,"place":"CW1 6BD","time":"2023-12-25T13:12:00.000Z","view":"horizon","mode":"sun"}
+  {"mode":"sun"} {}
+  #t=2026-06-21T11%3A00Z&view=globe&mode=orbit
+  ```
+- [ ] `node -e "const fs = require('fs'), m = fs.readFileSync('js/main.js', 'utf8'), h = fs.readFileSync('index.html', 'utf8'); console.log(/<button type=\"button\" id=\"share-btn\">Copy link<\/button>/.test(h), /history\.replaceState\(/.test(m), /history\.pushState\(/.test(m), /decodeShare\(location\.hash\)/.test(m), /clipboard\.writeText\(/.test(m))"` prints `true true false true true`
+- [ ] (browser) Open http://localhost:8000/#lat=53.0927&lon=-2.4185&place=CW1+6BD&t=2026-01-21T16:30Z&view=horizon&mode=sun : the horizon view for CW1 6BD at 16:30 on 21 Jan 2026, with the crescent Moon. "Show globe" shows "Sun in middle" pressed.
+- [ ] (browser) Change the time, the date and the view: the address bar follows within a moment, and Back still leaves the page instead of stepping through your changes. "Copy link" → "Copied"; paste it into a new tab and the same scene opens.
+
+---
+
+## After Step 25
+
+Re-run **every** `node` check in this file, from Step 1, and paste the output. Don't summarise it.
