@@ -1,12 +1,33 @@
 // 2D horizon canvas — no Three.js.
 
-import { sunAltAz, sunPath, sunEvents, twilightPhase } from './geo.js';
+import { sunAltAz, sunPath, sunEvents, twilightPhase, moonAltAz, moonInfo } from './geo.js';
 import { STRIP_W, nightAlpha, stripSourceHeight } from './pano.js';
 
 /** Path colours for each twilight phase. */
 export const PHASE_COLOURS = {
   day: '#ffd23f', golden: '#ff9a3c', civil: '#e86fa0', nautical: '#7a6fe0', astro: '#3a4aa8',
 };
+
+/** Draw the Moon at (x, y) with radius r: `fraction` of it lit, the lit side turned by `limb` (from moonAltAz). */
+export function drawMoon(ctx, x, y, r, fraction, limb) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(-limb - Math.PI / 2); // now the lit side faces +x
+  ctx.beginPath();
+  ctx.arc(0, 0, r, 0, Math.PI * 2);
+  ctx.fillStyle = '#3a3f4a';
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+  const k = 1 - 2 * fraction; // 1 new, 0 half, -1 full
+  ctx.beginPath();
+  ctx.arc(0, 0, r, -Math.PI / 2, Math.PI / 2);                               // the lit edge, top to bottom
+  ctx.ellipse(0, 0, r * Math.abs(k), r, 0, Math.PI / 2, -Math.PI / 2, k > 0); // the terminator, back to the top
+  ctx.fillStyle = '#f4f1e0';
+  ctx.fill();
+  ctx.restore();
+}
 
 /** Convert azimuth/altitude to pixel coordinates on the horizon canvas. */
 export function azAltToXY(az, alt, width, height, bottom = -10) {
@@ -199,6 +220,13 @@ export function drawHorizon(canvas, state) {
 
   drawTick(ev.sunriseAz, ev.sunrise);
   drawTick(ev.sunsetAz, ev.sunset);
+
+  // Moon
+  const moon = moonAltAz(state.simTime, state.lat, state.lon);
+  if (moon.alt > bottom) {
+    const mp = azAltToXY(moon.az, moon.alt, w, h, bottom);
+    drawMoon(ctx, mp.x, mp.y, 10, moonInfo(state.simTime).fraction, moon.limb);
+  }
 
   // Sun
   if (alt > bottom) {

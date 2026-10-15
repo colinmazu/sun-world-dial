@@ -95,6 +95,12 @@ export function spinAngles(date) {
   };
 }
 
+/** Where the Earth sits on its orbit in the "Sun in the middle" view: the Sun at the origin, the lean fixed. */
+export function orbitPosition(date, radius) {
+  const y = spinAngles(date).year;
+  return { x: -radius * Math.cos(y), y: 0, z: -radius * Math.sin(y) };
+}
+
 /** Advance simulated time by whole days only, so the time of day stays put.
     carryMs is real time not yet used up from earlier frames; yearMs is real ms per simulated year. */
 export function advanceByDays(simTime, carryMs, elapsedMs, yearMs) {
@@ -142,6 +148,35 @@ export function sunPath(date, lat, lon, minAlt = -10) {
     }
   }
   return points;
+}
+
+/** The Moon's altitude and azimuth in degrees (same convention as sunAltAz), and the bright limb's angle
+    in radians, measured from straight up, anticlockwise as you look at the sky. */
+export function moonAltAz(date, lat, lon) {
+  const p = globalThis.SunCalc.getMoonPosition(date, lat, lon);
+  const i = globalThis.SunCalc.getMoonIllumination(date);
+  return {
+    alt: p.altitude * 180 / Math.PI,
+    az: (p.azimuth * 180 / Math.PI + 180 + 360) % 360,
+    limb: i.angle - p.parallacticAngle,
+  };
+}
+
+/** How much of the Moon is lit (0..1) and whether it is waxing. */
+export function moonInfo(date) {
+  const i = globalThis.SunCalc.getMoonIllumination(date);
+  return { fraction: i.fraction, waxing: i.phase < 0.5 };
+}
+
+/** Moonrise and moonset on the UK day of `date` (null if there isn't one that day). */
+export function moonTimes(date, lat, lon) {
+  const noon = ukNoon(date);
+  const offsetHours = Number(new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Europe/London', hour: 'numeric', hour12: false,
+  }).format(noon)) - 12;
+  const midnight = new Date(noon.getTime() - (12 + offsetHours) * 3600000); // 00:00 UK time
+  const t = globalThis.SunCalc.getMoonTimes(midnight, lat, lon, true);
+  return { rise: t.rise || null, set: t.set || null, alwaysUp: !!t.alwaysUp, alwaysDown: !!t.alwaysDown };
 }
 
 /** The twilight phase for a sun altitude in degrees. */

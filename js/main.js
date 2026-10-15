@@ -1,11 +1,12 @@
 // Shared state, form handling, animation loop.
 
-import { normalisePostcode, formatLatLon, advanceTime, advanceByDays, sunEvents, twilightTimes } from './geo.js';
+import { normalisePostcode, formatLatLon, advanceTime, advanceByDays, sunEvents, twilightTimes, moonInfo, moonTimes } from './geo.js';
 import { keyAction } from './geo.js';
 import { lookupPostcode, nearestPostcode } from './postcode.js';
 import { createGlobe, setMarker, updateGlobe, setGlobeMode, getGlobeMode } from './globe.js';
 import { drawHorizon } from './horizon.js';
 import { initPano } from './pano-ui.js';
+import { encodeShare, decodeShare } from './share.js';
 
 const state = {
   postcode: null,
@@ -91,6 +92,7 @@ const globeDiv = document.getElementById('globe');
 const horizonCanvas = document.getElementById('horizon');
 const sunTimesEl = document.getElementById('sun-times');
 const twilightEl = document.getElementById('twilight-times');
+const moonEl = document.getElementById('moon-times');
 const timeSlider = document.getElementById('time-slider');
 const timeDisplay = document.getElementById('time-display');
 
@@ -162,19 +164,21 @@ midsummerBtn.addEventListener('click', () => setSeason(6, 21));
 midwinterBtn.addEventListener('click', () => setSeason(12, 21));
 equinoxBtn.addEventListener('click', () => setSeason(3, 20));
 
-// Orbit / Spin toggle
-const orbitSpinBtn = document.getElementById('orbit-spin-btn');
+// Globe view: three buttons, one pressed
+const modeButtons = {
+  orbit: document.getElementById('mode-orbit'),
+  spin: document.getElementById('mode-spin'),
+  sun: document.getElementById('mode-sun'),
+};
 
-orbitSpinBtn.addEventListener('click', () => {
-  if (getGlobeMode() === 'orbit') {
-    setGlobeMode('spin');
-    orbitSpinBtn.textContent = 'Sun orbits';
-  } else {
-    setGlobeMode('orbit');
-    orbitSpinBtn.textContent = 'Earth spins';
-  }
-  updateGlobe(state);
-});
+/** Switch the globe to 'orbit', 'spin' or 'sun' and show which button is pressed. */
+function setMode(m) {
+  setGlobeMode(m);
+  for (const [k, b] of Object.entries(modeButtons)) b.setAttribute('aria-pressed', String(k === m));
+  markDirty();
+}
+
+for (const [k, b] of Object.entries(modeButtons)) b.addEventListener('click', () => setMode(k));
 
 // UK time formatter for sunrise/sunset times
 const ukTimeFmt = new Intl.DateTimeFormat('en-GB', {
@@ -198,6 +202,7 @@ function updateSunTimes() {
   sunTimesEl.textContent =
     `Sunrise ${riseT} (${riseAz}°) · Sunset ${setT} (${setAz}°) · Day length ${h} h ${m.toString().padStart(2, '0')} m`;
   twilightEl.textContent = twilightText(state.simTime, state.lat, state.lon);
+  moonEl.textContent = moonText(state.simTime, state.lat, state.lon);
 }
 
 /** A UK hh:mm, or "—" for a missing or Invalid Date. */
@@ -215,19 +220,27 @@ function twilightText(date, lat, lon) {
     (neverDark ? 'never fully dark' : `dark from ${hhmm(t.night)}`);
 }
 
+/** "Moon 63% lit, waxing · Moonrise 14:02 · Moonset 03:15" */
+function moonText(date, lat, lon) {
+  const i = moonInfo(date);
+  const t = moonTimes(date, lat, lon);
+  const lit = `Moon ${Math.round(i.fraction * 100)}% lit, ${i.waxing ? 'waxing' : 'waning'}`;
+  if (t.alwaysUp) return lit + ' · up all day';
+  if (t.alwaysDown) return lit + ' · down all day';
+  return lit + ` · Moonrise ${hhmm(t.rise)} · Moonset ${hhmm(t.set)}`;
+}
+
 // View toggle: switch between globe and horizon
-viewToggle.addEventListener('click', () => {
-  if (horizonCanvas.hidden) {
-    horizonCanvas.hidden = false;
-    globeDiv.hidden = true;
-    viewToggle.textContent = 'Show globe';
-  } else {
-    horizonCanvas.hidden = true;
-    globeDiv.hidden = false;
-    viewToggle.textContent = 'Show horizon';
-  }
+/** Show 'globe' or 'horizon'. */
+function setView(v) {
+  const horizon = v === 'horizon';
+  horizonCanvas.hidden = !horizon;
+  globeDiv.hidden = horizon;
+  viewToggle.textContent = horizon ? 'Show globe' : 'Show horizon';
   markDirty();
-});
+}
+
+viewToggle.addEventListener('click', () => setView(horizonCanvas.hidden ? 'horizon' : 'globe'));
 
 // Redraw when the view area changes size (window resize, layout switch).
 new ResizeObserver(markDirty).observe(document.getElementById('views'));
@@ -362,6 +375,7 @@ function tick(ts) {
         updateSunTimes();
       }
       state.dirty = false;
+      if (!state.playing) scheduleShareUpdate();
     }
   }
   lastTs = ts;
@@ -403,3 +417,45 @@ initPano(state, {
     updateSunTimes();
   },
 });
+
+// --- Share link ---
+const shareBtn = document.getElementById('share-btn');
+let shareTimer = null;
+
+/** Put the current scene into the address bar (without adding to the history). */
+function writeShareHash() {
+  const hash = encodeShare({
+    lat: state.lat, lon: state.lon, place: state.postcode, time: state.simTime,
+    view: horizonCanvas.hidden ? 'globe' : 'horizon', mode: getGlobeMode(),
+  });
+  if (location.hash !== hash) history.replaceState(null, '', hash);
+}
+
+/** Write the hash 300 ms after the last change, so dragging a slider doesn't write it 60 times a second. */
+function scheduleShareUpdate() {
+  clearTimeout(shareTimer);
+  shareTimer = setTimeout(writeShareHash, 300);
+}
+
+shareBtn.addEventListener('click', async () => {
+  writeShareHash();
+  try {
+    await navigator.clipboard.writeText(location.href);
+    shareBtn.textContent = 'Copied';
+  } catch {
+    shareBtn.textContent = 'Copy the address bar';
+  }
+  setTimeout(() => { shareBtn.textContent = 'Copy link'; }, 1500);
+});
+
+// Open a shared link: apply whatever the hash holds.
+const shared = decodeShare(location.hash);
+if (shared.lat !== undefined) setLocation(shared.lat, shared.lon, shared.place);
+if (shared.time) {
+  state.simTime = shared.time;
+  timeSlider.value = ukMinuteOfDay(shared.time);
+  updateSunTimes();
+}
+if (shared.view) setView(shared.view);
+if (shared.mode) setMode(shared.mode);
+markDirty();

@@ -126,7 +126,10 @@ h1 { font-size: 1.75rem; }
 }
 
 #play-btn { min-width: 9ch; }
-#view-toggle, #orbit-spin-btn { min-width: 14ch; }
+#view-toggle { min-width: 14ch; }
+
+#view-mode { display: flex; flex-wrap: wrap; gap: 0.25rem; }
+#view-mode button[aria-pressed="true"] { background: #ffd23f; color: #1a1a1a; border-color: #c9a400; }
 
 #sun-controls button:focus-visible,
 #date-input:focus-visible, #speed-select:focus-visible {

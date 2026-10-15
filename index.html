@@ -25,6 +25,7 @@
     </form>
     <p id="location-result" aria-live="polite"></p>
     <p id="sim-clock" aria-live="off"></p>
+    <button type="button" id="share-btn">Copy link</button>
   </header>
   <main id="layout">
     <aside id="sidebar">
@@ -55,7 +56,11 @@
         <fieldset>
           <legend>View</legend>
           <button id="view-toggle">Show horizon</button>
-          <button id="orbit-spin-btn" type="button">Earth spins</button>
+          <div id="view-mode" role="group" aria-label="Globe view">
+            <button type="button" id="mode-orbit" aria-pressed="true">Sun orbits</button>
+            <button type="button" id="mode-spin" aria-pressed="false">Earth spins</button>
+            <button type="button" id="mode-sun" aria-pressed="false">Sun in middle</button>
+          </div>
         </fieldset>
       </section>
       <details id="pano-panel">
@@ -87,6 +92,7 @@
       </section>
       <p id="sun-times"></p>
       <p id="twilight-times"></p>
+      <p id="moon-times"></p>
       <canvas id="pano-preview" hidden></canvas>
     </section>
   </main>
