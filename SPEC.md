@@ -922,7 +922,7 @@ The view gets **taller** rather than squashed: a degree keeps the same size on s
 
 - `azAltToXY(az, alt, width, height, bottom = -10)`: `y = (70 - alt) / (70 - bottom) * height`. With no fifth argument it behaves exactly as before, so the Step 5 check still passes.
 - In `drawHorizon`, `const bottom = -state.groundDeg;` and pass `bottom` to **every** `azAltToXY` call. Replace `const horizonY = (70 / 80) * h;` with `const horizonY = azAltToXY(180, 0, w, h, bottom).y;`. No other `70` / `80` arithmetic may stay in the file; sunrise/sunset ticks and labels already use `horizonY`.
-- The photo strip now covers 70° to −60° (see `pano.js`), so draw only its top part, down to the chosen depth:
+- The photo strip now covers 70° to −60° (see `pano.js`), so draw only its top part, down to the chosen depth. The source width is the strip's full width, `STRIP_W`, **not** the canvas width `w`; otherwise only the left third of the strip is shown and the compass points no longer match the photo:
   `ctx.drawImage(state.horizonPhoto, 0, 0, STRIP_W, stripSourceHeight(state.groundDeg), 0, 0, w, h);`
 
 **`js/pano.js`**:
@@ -968,7 +968,7 @@ It works with or without a photo (without one, there is simply more green ground
   [{"sx":341.333,"sy":227.556,"sw":3413.333,"sh":1479.111,"dx":0,"dy":0,"dw":2400,"dh":1300}]
   [{"sx":341.333,"sy":0,"sw":3413.333,"sh":1366.209,"dx":0,"dy":99.23,"dw":2400,"dh":1200.77}]
   ```
-- [ ] `node -e "const fs = require('fs'), z = fs.readFileSync('js/horizon.js', 'utf8'), p = fs.readFileSync('js/pano-ui.js', 'utf8'), m = fs.readFileSync('js/main.js', 'utf8'), h = fs.readFileSync('index.html', 'utf8'), calls = [...z.matchAll(/azAltToXY\(([^()]*)\)/g)]; console.log(calls.length > 4 && calls.every(c => c[1].split(',').length === 5), /70\s*\/\s*80|\/\s*80\b/.test(z), /stripSourceHeight\(\s*state\.groundDeg\s*\)/.test(z), /panoCropRects\([^)]*STRIP_LOW\s*\)/.test(p), /STRIP_FULL_H/.test(p), /groundDeg:\s*10/.test(m), /aspectRatio/.test(m), m.includes('sunworld.groundDeg'), /id=\"ground-slider\" min=\"10\" max=\"60\" step=\"5\" value=\"10\"/.test(h))"` prints `true false true true true true true true true`
+- [ ] `node -e "const fs = require('fs'), z = fs.readFileSync('js/horizon.js', 'utf8'), p = fs.readFileSync('js/pano-ui.js', 'utf8'), m = fs.readFileSync('js/main.js', 'utf8'), h = fs.readFileSync('index.html', 'utf8'), calls = [...z.matchAll(/azAltToXY\(([^()]*)\)/g)]; console.log(calls.length > 4 && calls.every(c => c[1].split(',').length === 5), /70\s*\/\s*80|\/\s*80\b/.test(z), /drawImage\(\s*state\.horizonPhoto,\s*0,\s*0,\s*STRIP_W,\s*stripSourceHeight\(\s*state\.groundDeg\s*\),\s*0,\s*0,\s*w,\s*h\s*\)/.test(z), /panoCropRects\([^)]*STRIP_LOW\s*\)/.test(p), /STRIP_FULL_H/.test(p), /groundDeg:\s*10/.test(m), /aspectRatio/.test(m), m.includes('sunworld.groundDeg'), /id=\"ground-slider\" min=\"10\" max=\"60\" step=\"5\" value=\"10\"/.test(h))"` prints `true false true true true true true true true`
 - [ ] (browser) Horizon view, no photo: moving Ground from 10° to 60° makes the view taller with more green below; the sun, the arcs and the compass labels stay in the same place relative to the horizon line, and nothing is squashed.
 - [ ] (browser) With the drone photo loaded: at 40–60° the streets and buildings below the drone come into view, and the S line on the preview still matches the S label on the horizon.
 - [ ] (browser) Reload: the Ground setting and the photo are both remembered, and the photo is drawn at the new depth.
