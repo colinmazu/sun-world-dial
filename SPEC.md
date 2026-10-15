@@ -1051,3 +1051,92 @@ Remove both keys (and `'sunWorldDial_pano'`), set `state.horizonPhoto = null`, c
 - [ ] (browser) Play past sunset: the whole photo darkens evenly to deep blue by the time the sun is 12° down, with no stripes, and lightens again at dawn. The compass labels stay readable.
 - [ ] (browser) "Save small image" downloads `horizon-2023-12-25.jpg` (2400×1300) for the sample photo.
 - [ ] (browser) "Remove photo", then reload: the drawn sky and ground are back.
+
+---
+
+## Step 19: Desktop layout
+
+On a wide screen the page is capped at 900 px and centred. The title, the form, the location line, two rows of controls and the clock stack up, so the view starts about halfway down the screen. From **1000 px wide**, change to:
+
+- one **slim top bar**: a small title, the postcode form, the location line, and the clock on the right;
+- a **280 px sidebar** on the left with the controls, grouped as Time / Season / View, and the Horizon photo panel;
+- the **view** filling the rest of the width and reaching down to the bottom of the screen. Under it go the sunrise/sunset line and, when a photo is loaded, the photo preview, now as wide as the view, so clicking south is more precise.
+
+Below 1000 px everything stays stacked as now. **No element id changes**, so the JavaScript keeps working; only the HTML structure and the CSS move. The only JavaScript changes are listed under `js/globe.js` and `js/main.js`.
+
+**`index.html`**: make the `<body>` (before the `<script type="module">`) exactly this structure. Every element keeps its existing attributes and contents unless stated:
+
+```html
+<header id="topbar">
+  <h1>☀ Sun World Dial</h1>
+  <form id="postcode-form">…as now, with placeholder="UK postcode" added to the input…</form>
+  <p id="location-result" aria-live="polite"></p>
+  <p id="sim-clock" aria-live="off"></p>
+</header>
+<main id="layout">
+  <aside id="sidebar">
+    <section id="sun-controls">
+      <fieldset>
+        <legend>Time</legend>
+        date label + #date-input, time label + #time-slider + #time-display, #play-btn, speed label + #speed-select
+      </fieldset>
+      <fieldset>
+        <legend>Season</legend>
+        #midsummer-btn, #midwinter-btn, #equinox-btn
+      </fieldset>
+      <fieldset>
+        <legend>View</legend>
+        #view-toggle, #orbit-spin-btn
+      </fieldset>
+    </section>
+    <details id="pano-panel">…as now, but WITHOUT the #pano-preview canvas…</details>
+  </aside>
+  <section id="stage">
+    <section id="views">#globe and #horizon as now</section>
+    <p id="sun-times"></p>
+    <canvas id="pano-preview" hidden></canvas>
+  </section>
+</main>
+```
+
+(`#sim-clock` moves out of `#sun-controls` into the top bar, and `#pano-preview` moves out of the panel to under the view.)
+
+**`style.css`**:
+
+- Each `fieldset` in `#sun-controls`: `display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem;`, a 1px `var(--border)` border, 6px radius, small padding. Each `legend` is small (0.75rem), upper-case, letter-spaced, in a muted colour. On narrow screens the fieldsets sit side by side and wrap, much like the controls do now.
+- `#pano-preview { width: 100%; cursor: crosshair; }` (as now, in its new place).
+- Add one block, after the existing rules:
+
+```css
+@media (min-width: 1000px) {
+  body { max-width: none; padding: 0 1rem 1rem; }
+  #topbar { display: flex; align-items: center; gap: 1rem; padding: 0.5rem 0; text-align: left; }
+  #topbar h1 { font-size: 1.15rem; white-space: nowrap; }
+  #postcode-form { margin: 0; flex-wrap: nowrap; }
+  #postcode-form label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  #location-result { margin: 0; text-align: left; }
+  #sim-clock { margin-left: auto; width: auto; }
+  #layout { display: grid; grid-template-columns: 280px 1fr; gap: 1rem; align-items: start; }
+  #sidebar { position: sticky; top: 0.5rem; max-height: calc(100vh - 4rem); overflow-y: auto; }
+  #sun-controls { flex-direction: column; align-items: stretch; justify-content: flex-start; margin: 0; }
+  #views { min-height: calc(100vh - 7rem); }
+  #globe { height: calc(100vh - 7rem); max-height: none; aspect-ratio: auto; }
+  #horizon { width: min(100%, calc((100vh - 7rem) * var(--hr, 3))); margin: 0 auto; }
+}
+```
+
+The `#horizon` width keeps the whole view on screen: it is the full width unless that would make it taller than the space, in which case it narrows (keeping its shape) and centres. `--hr` is the width-to-height ratio, set by `main.js`.
+
+**`js/main.js`**: in `applyGround(deg)`, as well as `aspectRatio`, set `horizonCanvas.style.setProperty('--hr', String(240 / (70 + deg)));`.
+
+**`js/globe.js`**: the globe's box now changes size without the window resizing (the layout switches at 1000 px, and the globe starts hidden or shown). In `createGlobe`, replace `window.addEventListener('resize', resize);` with `new ResizeObserver(resize).observe(container);`. In `resize`, return early if `w` or `h` is 0 (the globe is hidden).
+
+**Done when**
+
+- [ ] All earlier checks still pass.
+- [ ] `node -e "const fs = require('fs'), h = fs.readFileSync('index.html', 'utf8'); const block = re => (h.match(re) || ['', ''])[1]; const top = block(/<header id=\"topbar\">([\s\S]*?)<\/header>/), side = block(/<aside id=\"sidebar\">([\s\S]*?)<\/aside>/), stage = block(/<section id=\"stage\">([\s\S]*?)<\/main>/); const has = (b, ids) => ids.every(i => b.includes('id=\"' + i + '\"')); const ids = [...h.matchAll(/id=\"([^\"]+)\"/g)].map(m => m[1]); console.log(has(top, ['postcode-form', 'location-result', 'sim-clock']), has(side, ['sun-controls', 'date-input', 'time-slider', 'play-btn', 'speed-select', 'midsummer-btn', 'view-toggle', 'orbit-spin-btn', 'pano-panel', 'pano-input', 'ground-slider']), has(stage, ['views', 'globe', 'horizon', 'sun-times', 'pano-preview']), has(side, ['pano-preview']), ids.length === new Set(ids).size, (h.match(/<legend>(Time|Season|View)<\/legend>/g) || []).length)"` prints `true true true false true 3`
+- [ ] `node -e "const fs = require('fs'), c = fs.readFileSync('style.css', 'utf8'), g = fs.readFileSync('js/globe.js', 'utf8'), m = fs.readFileSync('js/main.js', 'utf8'); console.log(/@media \(min-width:\s*1000px\)/.test(c), /grid-template-columns:\s*280px 1fr/.test(c), /var\(--hr/.test(c), /new ResizeObserver\(\s*resize\s*\)\.observe\(\s*container\s*\)/.test(g), /addEventListener\(\s*'resize'/.test(g), /setProperty\(\s*'--hr'/.test(m))"` prints `true true true true false true`
+- [ ] (browser, wide window) The top bar is one slim row; the controls are in a left column in three labelled groups; the horizon or globe fills the rest of the width, and the whole view fits on screen without scrolling, including with Ground at 60°.
+- [ ] (browser, wide window) Switching globe ↔ horizon doesn't move the sidebar or the top bar, and the globe is round (not stretched) after switching and after resizing the window.
+- [ ] (browser, wide window) With a photo loaded, the preview sits under the view at full width, and clicking it still sets south correctly (the S line lands where you click).
+- [ ] (browser, narrow window under 1000 px, or phone) The page is stacked as before and nothing is cut off.
