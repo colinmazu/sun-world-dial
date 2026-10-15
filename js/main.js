@@ -2,7 +2,7 @@
 
 import { normalisePostcode, formatLatLon, advanceTime, advanceByDays, sunEvents } from './geo.js';
 import { keyAction } from './geo.js';
-import { lookupPostcode } from './postcode.js';
+import { lookupPostcode, nearestPostcode } from './postcode.js';
 import { createGlobe, setMarker, updateGlobe, setGlobeMode, getGlobeMode } from './globe.js';
 import { drawHorizon } from './horizon.js';
 import { initPano } from './pano-ui.js';
@@ -55,6 +55,30 @@ form.addEventListener('submit', async (e) => {
   } finally {
     btn.disabled = false;
   }
+});
+
+// --- Use my location ---
+const locateBtn = document.getElementById('locate-btn');
+if (!('geolocation' in navigator)) locateBtn.hidden = true;
+
+locateBtn.addEventListener('click', () => {
+  result.textContent = 'Finding you…';
+  locateBtn.disabled = true;
+  navigator.geolocation.getCurrentPosition(
+    async (pos) => {
+      const { latitude, longitude } = pos.coords;
+      const label = (await nearestPostcode(latitude, longitude)) ?? 'Your location';
+      setLocation(latitude, longitude, label);
+      locateBtn.disabled = false;
+    },
+    (err) => {
+      result.textContent = err.code === 1
+        ? 'Location permission was refused.'
+        : "Couldn't get your location.";
+      locateBtn.disabled = false;
+    },
+    { enableHighAccuracy: false, timeout: 10000, maximumAge: 600000 },
+  );
 });
 
 // --- Controls ---
