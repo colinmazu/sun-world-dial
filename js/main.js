@@ -1,6 +1,6 @@
 // Shared state, form handling, animation loop.
 
-import { normalisePostcode, formatLatLon, advanceTime, sunEvents } from './geo.js';
+import { normalisePostcode, formatLatLon, advanceTime, advanceByDays, sunEvents } from './geo.js';
 import { lookupPostcode } from './postcode.js';
 import { createGlobe, setMarker, updateGlobe, setGlobeMode, getGlobeMode } from './globe.js';
 import { drawHorizon } from './horizon.js';
@@ -12,6 +12,8 @@ const state = {
   simTime: new Date(),
   playing: false,
   dayMs: 24000,
+  yearMs: null,
+  carryMs: 0,
 };
 
 export { state };
@@ -186,7 +188,13 @@ playBtn.addEventListener('click', () => {
 });
 
 speedSelect.addEventListener('change', () => {
-  state.dayMs = Number(speedSelect.value);
+  if (speedSelect.value === 'year60') {
+    state.yearMs = 60000;
+  } else {
+    state.yearMs = null;
+    state.dayMs = Number(speedSelect.value);
+  }
+  state.carryMs = 0;
 });
 
 dateInput.addEventListener('change', () => {
@@ -214,7 +222,13 @@ function tick(ts) {
   if (lastTs !== null) {
     const elapsedMs = ts - lastTs;
     if (state.playing) {
-      state.simTime = advanceTime(state.simTime, elapsedMs, state.dayMs);
+      if (state.yearMs) {
+        const r = advanceByDays(state.simTime, state.carryMs, elapsedMs, state.yearMs);
+        state.simTime = r.simTime;
+        state.carryMs = r.carryMs;
+      } else {
+        state.simTime = advanceTime(state.simTime, elapsedMs, state.dayMs);
+      }
     }
     updateGlobe(state);
 

@@ -95,6 +95,15 @@ export function spinAngles(date) {
   };
 }
 
+/** Advance simulated time by whole days only, so the time of day stays put.
+    carryMs is real time not yet used up from earlier frames; yearMs is real ms per simulated year. */
+export function advanceByDays(simTime, carryMs, elapsedMs, yearMs) {
+  const msPerDay = yearMs / 365.2422;
+  const total = carryMs + elapsedMs;
+  const days = Math.floor(total / msPerDay);
+  return { simTime: new Date(simTime.getTime() + days * 86400000), carryMs: total - days * msPerDay };
+}
+
 /** Return an array of { az, alt } points for the sun path every 10 minutes on a UK calendar day. */
 export function sunPath(date, lat, lon) {
   // Determine the UK calendar date for this moment.
