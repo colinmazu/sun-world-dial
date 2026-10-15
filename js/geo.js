@@ -78,10 +78,21 @@ export function sunEvents(date, lat, lon) {
   return { sunrise: times.sunrise, sunset: times.sunset, sunriseAz, sunsetAz };
 }
 
-/** Rotation (radians) that turns the globe so the subsolar point faces +x, where the fixed sun is. */
+/** Angles (radians) for the "Earth spins" view, where the sun is fixed at +x and the camera looks from +z. */
 export function spinAngles(date) {
-  const s = subsolarPoint(date);
-  return { y: Math.PI / 2 - s.lon * Math.PI / 180, z: -s.lat * Math.PI / 180 };
+  const r = Math.PI / 180;
+  const d = date.getTime() / 86400000 - 10957.5;
+  const g = (357.529 + 0.98560028 * d) * r;
+  const q = 280.459 + 0.98564736 * d;
+  const L = (q + 1.915 * Math.sin(g) + 0.020 * Math.sin(2 * g)) * r; // the sun's ecliptic longitude
+  const e = (23.439 - 0.00000036 * d) * r;                            // the axial tilt
+  const ra = Math.atan2(Math.cos(e) * Math.sin(L), Math.cos(L));      // the sun's right ascension
+  const wrap = a => Math.atan2(Math.sin(a), Math.cos(a));             // into -π..π
+  return {
+    year: wrap(Math.PI / 2 - L),                 // turns the direction of the lean as the year goes on
+    tilt: -e,                                    // leans the axis by 23.4°
+    spin: wrap(ra - subsolarPoint(date).lon * r), // turns the Earth so the subsolar point faces the sun
+  };
 }
 
 /** Return an array of { az, alt } points for the sun path every 10 minutes on a UK calendar day. */

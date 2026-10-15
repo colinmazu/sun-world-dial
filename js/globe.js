@@ -5,7 +5,10 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { latLonToVector3, subsolarPoint, spinAngles } from './geo.js';
 
 let scene, camera, renderer, earth;
+let yearGroup = null;
+let tiltGroup = null;
 let globeGroup = null;
+let axisLine = null;
 let markerGroup = null;
 let sunMesh, sunLight;
 let mode = 'orbit';
@@ -45,11 +48,29 @@ export function createGlobe(container) {
   // Rotate so longitude 0° faces +z (toward the viewer)
   earth.rotation.y = -Math.PI / 2;
 
-  // Globe group holds earth and marker; rotation order 'ZYX' for spin mode.
+  // Globe group holds earth and marker.
   globeGroup = new THREE.Group();
-  globeGroup.rotation.order = 'ZYX';
   globeGroup.add(earth);
-  scene.add(globeGroup);
+
+  // Tilt group: leans the axis by ~23.4°. Holds globeGroup and the axis line.
+  tiltGroup = new THREE.Group();
+  tiltGroup.add(globeGroup);
+
+  // Axis line through the poles (visible only in spin mode)
+  axisLine = new THREE.Line(
+    new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(0, -1.4, 0),
+      new THREE.Vector3(0, 1.4, 0)
+    ]),
+    new THREE.LineBasicMaterial({ color: 0xffffff })
+  );
+  axisLine.visible = false;
+  tiltGroup.add(axisLine);
+
+  // Year group: turns the direction of the lean as the year progresses.
+  yearGroup = new THREE.Group();
+  yearGroup.add(tiltGroup);
+  scene.add(yearGroup);
 
   // Lighting — dim ambient, bright directional from the sun
   const ambient = new THREE.AmbientLight(0xffffff, 0.15);
@@ -114,14 +135,20 @@ export function setMarker(lat, lon) {
 /** Move the sun mesh and directional light based on the current mode. */
 export function updateGlobe(state) {
   if (mode === 'orbit') {
+    yearGroup.rotation.set(0, 0, 0);
+    tiltGroup.rotation.set(0, 0, 0);
     globeGroup.rotation.set(0, 0, 0);
+    axisLine.visible = false;
     const sp = subsolarPoint(state.simTime);
     const pos = latLonToVector3(sp.lat, sp.lon, 3);
     sunMesh.position.set(pos.x, pos.y, pos.z);
     sunLight.position.copy(sunMesh.position);
   } else {
     const a = spinAngles(state.simTime);
-    globeGroup.rotation.set(0, a.y, a.z);
+    yearGroup.rotation.set(0, a.year, 0);
+    tiltGroup.rotation.set(0, 0, a.tilt);
+    globeGroup.rotation.set(0, a.spin, 0);
+    axisLine.visible = true;
     sunMesh.position.set(3, 0, 0);
     sunLight.position.set(3, 0, 0);
   }
