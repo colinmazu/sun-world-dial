@@ -1,6 +1,7 @@
 // Shared state, form handling, animation loop.
 
 import { normalisePostcode, formatLatLon, advanceTime, advanceByDays, sunEvents } from './geo.js';
+import { keyAction } from './geo.js';
 import { lookupPostcode } from './postcode.js';
 import { createGlobe, setMarker, updateGlobe, setGlobeMode, getGlobeMode } from './globe.js';
 import { drawHorizon } from './horizon.js';
@@ -17,9 +18,15 @@ const state = {
   carryMs: 0,
   horizonPhoto: null,
   groundDeg: 10,
+  dirty: true,
 };
 
 export { state };
+
+/** Ask the animation loop to redraw on its next frame. */
+function markDirty() {
+  state.dirty = true;
+}
 
 // --- Postcode form ---
 const form = document.getElementById('postcode-form');
@@ -38,13 +45,7 @@ form.addEventListener('submit', async (e) => {
   btn.disabled = true;
   try {
     const loc = await lookupPostcode(normalised);
-    state.postcode = loc.postcode;
-    state.lat = loc.lat;
-    state.lon = loc.lon;
-    result.textContent = loc.postcode + ': ' + formatLatLon(loc.lat, loc.lon);
-    setMarker(state.lat, state.lon);
-    updateSunTimes();
-    markDirty();
+    setLocation(loc.lat, loc.lon, loc.postcode);
   } catch (err) {
     if (err instanceof TypeError && err.message.includes('fetch')) {
       result.textContent = "Couldn't reach the postcode service.";
@@ -81,6 +82,23 @@ function ukMinuteOfDay(d) {
   return Number(ukHourFmt.format(d)) * 60 + Number(ukMinFmt.format(d));
 }
 
+/** Start or stop playback and update the Play button. */
+function setPlaying(on) {
+  state.playing = on;
+  playBtn.textContent = on ? 'Pause' : 'Play';
+}
+
+/** Show a new place: state, the location line, the marker and the sun times. */
+function setLocation(lat, lon, label) {
+  state.lat = lat;
+  state.lon = lon;
+  state.postcode = label;
+  result.textContent = label + ': ' + formatLatLon(lat, lon);
+  setMarker(lat, lon);
+  updateSunTimes();
+  markDirty();
+}
+
 /** Set simTime to a given UK minute-of-day on the current simulated date. */
 function setTimeFromSlider(minuteOfDay) {
   const parts = dateInput.value.split('-').map(Number);
@@ -99,8 +117,7 @@ timeSlider.value = ukMinuteOfDay(state.simTime);
 // Slider drag: set time and pause playback.
 timeSlider.addEventListener('input', () => {
   setTimeFromSlider(Number(timeSlider.value));
-  state.playing = false;
-  playBtn.textContent = 'Play';
+  setPlaying(false);
 });
 const midsummerBtn = document.getElementById('midsummer-btn');
 const midwinterBtn = document.getElementById('midwinter-btn');
@@ -112,8 +129,7 @@ function setSeason(month, day) {
   const utcNoon = new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
   const offsetHours = Number(ukHourFmt.format(utcNoon)) - 12;
   state.simTime = new Date(utcNoon.getTime() - offsetHours * 3600000);
-  state.playing = false;
-  playBtn.textContent = 'Play';
+  setPlaying(false);
   markDirty();
 }
 
@@ -169,7 +185,11 @@ viewToggle.addEventListener('click', () => {
     globeDiv.hidden = false;
     viewToggle.textContent = 'Show horizon';
   }
+  markDirty();
 });
+
+// Redraw when the view area changes size (window resize, layout switch).
+new ResizeObserver(markDirty).observe(document.getElementById('views'));
 
 // UK formatter for the clock
 const ukFmt = new Intl.DateTimeFormat('en-GB', {
@@ -194,8 +214,7 @@ const d = ukIso.find(p => p.type === 'day').value;
 dateInput.value = y + '-' + m + '-' + d;
 
 playBtn.addEventListener('click', () => {
-  state.playing = !state.playing;
-  playBtn.textContent = state.playing ? 'Pause' : 'Play';
+  setPlaying(!state.playing);
 });
 
 speedSelect.addEventListener('change', () => {
@@ -253,11 +272,6 @@ groundSlider.addEventListener('input', () => {
 createGlobe(document.getElementById('globe'));
 
 let lastTs = null;
-let dirty = true; // redraw globe, horizon, and UI when state has changed
-
-function markDirty() {
-  dirty = true;
-}
 
 function tick(ts) {
   requestAnimationFrame(tick);
@@ -268,13 +282,13 @@ function tick(ts) {
         const r = advanceByDays(state.simTime, state.carryMs, elapsedMs, state.yearMs);
         state.simTime = r.simTime;
         state.carryMs = r.carryMs;
-        dirty = true;
+        state.dirty = true;
       } else {
         state.simTime = advanceTime(state.simTime, elapsedMs, state.dayMs);
-        dirty = true;
+        state.dirty = true;
       }
     }
-    if (dirty) {
+    if (state.dirty) {
       updateGlobe(state);
 
       // Draw horizon if visible
@@ -306,7 +320,7 @@ function tick(ts) {
         dateInput.value = currentDateStr;
         updateSunTimes();
       }
-      dirty = false;
+      state.dirty = false;
     }
   }
   lastTs = ts;
@@ -314,21 +328,35 @@ function tick(ts) {
 
 requestAnimationFrame(tick);
 
+// --- Keyboard shortcuts ---
+document.addEventListener('keydown', (e) => {
+  if (e.ctrlKey || e.altKey || e.metaKey) return;
+  const t = e.target;
+  if (t.closest && t.closest('input, select, textarea, [contenteditable]')) return;
+  const act = keyAction(e.key);
+  if (!act) return;
+  if (act.toggle && t.closest && t.closest('button, summary')) return; // Space already clicks a focused button
+  e.preventDefault();
+  if (act.toggle) {
+    setPlaying(!state.playing);
+    return;
+  }
+  setPlaying(false);
+  const ms = act.minutes ? act.minutes * 60000 : act.days * 86400000;
+  state.simTime = new Date(state.simTime.getTime() + ms);
+  timeSlider.value = ukMinuteOfDay(state.simTime);
+  updateSunTimes();
+  markDirty();
+});
+
 // --- Panorama panel ---
 initPano(state, {
   onLocation(lat, lon, label) {
-    state.lat = lat;
-    state.lon = lon;
-    state.postcode = label;
-    result.textContent = label + ': ' + formatLatLon(lat, lon);
-    setMarker(lat, lon);
-    updateSunTimes();
-    markDirty();
+    setLocation(lat, lon, label);
   },
   onTime(date) {
     state.simTime = date;
-    state.playing = false;
-    playBtn.textContent = 'Play';
+    setPlaying(false);
     timeSlider.value = ukMinuteOfDay(date);
     markDirty();
     updateSunTimes();

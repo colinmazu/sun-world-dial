@@ -102,6 +102,7 @@ export function initPano(state, { onLocation, onTime }) {
       ctx.drawImage(img, r.sx, r.sy, r.sw, r.sh, r.dx, r.dy, r.dw, r.dh);
     }
     state.horizonPhoto = strip;
+    state.dirty = true;
   }
 
   /** Redraw the preview canvas with directional overlays. */
@@ -360,6 +361,7 @@ export function initPano(state, { onLocation, onTime }) {
     southU = 0.5;
     clickMode = null;
     state.horizonPhoto = null;
+    state.dirty = true;
     panoInput.value = '';
     panoPreview.hidden = true;
     updateButtons();

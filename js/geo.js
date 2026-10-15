@@ -104,9 +104,18 @@ export function advanceByDays(simTime, carryMs, elapsedMs, yearMs) {
   return { simTime: new Date(simTime.getTime() + days * 86400000), carryMs: total - days * msPerDay };
 }
 
+/** What a keyboard key does: { toggle: true }, { minutes: n }, { days: n }, or null. */
+export function keyAction(key) {
+  if (key === ' ') return { toggle: true };
+  if (key === 'ArrowLeft') return { minutes: -10 };
+  if (key === 'ArrowRight') return { minutes: 10 };
+  if (key === 'ArrowUp') return { days: 1 };
+  if (key === 'ArrowDown') return { days: -1 };
+  return null;
+}
+
 /** Return an array of { az, alt } points for the sun path every 10 minutes on a UK calendar day. */
 export function sunPath(date, lat, lon) {
-  // Determine the UK calendar date for this moment.
   const ukParts = new Intl.DateTimeFormat('en-GB', {
     timeZone: 'Europe/London', year: 'numeric', month: 'numeric', day: 'numeric',
   }).formatToParts(date);

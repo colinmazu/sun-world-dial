@@ -11,7 +11,8 @@
       "Bash(test *)",
       "Bash(true)",
       "Bash(git remote *)",
-      "Bash(git checkout *)"
+      "Bash(git checkout *)",
+      "Bash(mv *)"
     ],
     "deny": [
       "advisor",
