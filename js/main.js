@@ -203,9 +203,6 @@ dateInput.addEventListener('change', () => {
   // Create a UTC date for the given calendar day, then offset to UK midnight.
   const utc = new Date(Date.UTC(parts[0], parts[1] - 1, parts[2], 12, 0, 0));
   // Get UK offset at noon on that date
-  const ukStr = utc.toLocaleString('en-GB', { timeZone: 'Europe/London' });
-  // Parse the UK time to figure out offset — but don't use Date.parse on DD/MM/YYYY.
-  // Instead, compute offset by formatting in both UTC and UK.
   const utcHour = new Intl.DateTimeFormat('en-GB', {
     timeZone: 'Europe/London', hour: 'numeric', hour12: false,
   }).format(utc);
@@ -219,6 +216,7 @@ createGlobe(document.getElementById('globe'));
 let lastTs = null;
 
 function tick(ts) {
+  requestAnimationFrame(tick);
   if (lastTs !== null) {
     const elapsedMs = ts - lastTs;
     if (state.playing) {
@@ -265,7 +263,6 @@ function tick(ts) {
     }
   }
   lastTs = ts;
-  requestAnimationFrame(tick);
 }
 
 requestAnimationFrame(tick);

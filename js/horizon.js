@@ -81,6 +81,11 @@ export function drawHorizon(canvas, state) {
   // --- Sun paths ---
   const year = state.simTime.getUTCFullYear();
 
+  // Choose guide colours based on whether it is day or night
+  const day = alt >= 0;
+  const guide = day ? 'rgba(15,30,70,0.7)' : 'rgba(255,255,255,0.5)';
+  const guideText = day ? 'rgba(15,30,70,0.9)' : 'rgba(255,255,255,0.75)';
+
   /** Draw a path as a line on the canvas. */
   function drawPathLine(points, color, lineWidth, dashed) {
     if (points.length < 2) return;
@@ -99,16 +104,19 @@ export function drawHorizon(canvas, state) {
     ctx.setLineDash([]);
   }
 
-  // Midsummer path (21 June) — dashed white at 35% opacity
+  // Midsummer path (21 June) — dashed guide colour
   const midsummerDate = new Date(Date.UTC(year, 5, 21, 12, 0, 0));
-  drawPathLine(sunPath(midsummerDate, state.lat, state.lon), 'rgba(255,255,255,0.35)', 1.5, true);
+  drawPathLine(sunPath(midsummerDate, state.lat, state.lon), guide, 1.5, true);
 
-  // Midwinter path (21 December) — dashed white at 35% opacity
+  // Midwinter path (21 December) — dashed guide colour
   const midwinterDate = new Date(Date.UTC(year, 11, 21, 12, 0, 0));
-  drawPathLine(sunPath(midwinterDate, state.lat, state.lon), 'rgba(255,255,255,0.35)', 1.5, true);
+  drawPathLine(sunPath(midwinterDate, state.lat, state.lon), guide, 1.5, true);
 
-  // Current day path — solid yellow
+  // Current day path — solid yellow (with dark edge during day for contrast)
   const todayPath = sunPath(state.simTime, state.lat, state.lon);
+  if (day) {
+    drawPathLine(todayPath, 'rgba(15,30,70,0.6)', 4, false);
+  }
   drawPathLine(todayPath, '#ffd23f', 2, false);
 
   // Labels for solstice paths near their highest point
@@ -117,7 +125,7 @@ export function drawHorizon(canvas, state) {
     if (points.length === 0) return;
     const top = points.reduce((a, b) => b.alt > a.alt ? b : a);
     const p = azAltToXY(top.az, top.alt, w, h);
-    ctx.fillStyle = 'rgba(255,255,255,0.6)';
+    ctx.fillStyle = guideText;
     ctx.fillText(text, p.x, p.y - 8);
   }
   labelPath(sunPath(midsummerDate, state.lat, state.lon), '21 Jun');
