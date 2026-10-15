@@ -909,3 +909,67 @@ No changes to any other file in this step.
 - [ ] (browser) Reload the page: the photo is still in the horizon view, and the status says "Using the saved photo: …".
 - [ ] (browser) "Save small image" downloads `horizon-2023-12-25.jpg` (for the sample), about 2400×800 and well under 1 MB.
 - [ ] (browser) "Remove photo": the drawn sky and ground come back, and stay back after a reload.
+
+---
+
+## Step 17: Show more ground
+
+The horizon view shows altitude 70° down to −10°. A photo taken from high up (a drone at 100 m or more) has its nearby landmarks well below −10°, so the user can't get their bearings. Add a **Ground** slider that sets how far below the horizon the view goes: 10° (as now) to 60°.
+
+The view gets **taller** rather than squashed: a degree keeps the same size on screen, so the sky, sun and arcs look exactly as before and the ground is added underneath. The width stays 300°.
+
+**`js/horizon.js`**:
+
+- `azAltToXY(az, alt, width, height, bottom = -10)`: `y = (70 - alt) / (70 - bottom) * height`. With no fifth argument it behaves exactly as before, so the Step 5 check still passes.
+- In `drawHorizon`, `const bottom = -state.groundDeg;` and pass `bottom` to **every** `azAltToXY` call. Replace `const horizonY = (70 / 80) * h;` with `const horizonY = azAltToXY(180, 0, w, h, bottom).y;`. No other `70` / `80` arithmetic may stay in the file; sunrise/sunset ticks and labels already use `horizonY`.
+- The photo strip now covers 70° to −60° (see `pano.js`), so draw only its top part, down to the chosen depth:
+  `ctx.drawImage(state.horizonPhoto, 0, 0, STRIP_W, stripSourceHeight(state.groundDeg), 0, 0, w, h);`
+
+**`js/pano.js`**:
+
+- `export const STRIP_LOW = -60;` and `export const STRIP_FULL_H = 1300;`: the strip now goes down to −60°, at the same scale as before (800 px for 80°, so 1300 px for 130°).
+- `panoCropRects(meta, southU, outW, outH, bottom = -10)`: the bottom row is altitude `bottom` instead of −10°, so −10° becomes `(90 - bottom)`. With no fifth argument it behaves exactly as before, so the Step 14 checks still pass.
+- `stripSourceHeight(groundDeg)` → `STRIP_FULL_H * (70 + groundDeg) / 130`: how many strip rows the view needs.
+
+**`js/pano-ui.js`**: make the strip `STRIP_W` × `STRIP_FULL_H`, and build it with `panoCropRects(meta, southU, STRIP_W, STRIP_FULL_H, STRIP_LOW)`. The photo saved in `localStorage` is the full decoded image, so after a reload the strip is rebuilt at the new size; nothing else changes. "Save small image" now saves 2400×1300 (down to −60°).
+
+**`index.html`**: in `#pano-panel`, straight after `<summary>`, add:
+
+```html
+<div id="ground-control">
+  <label for="ground-slider">Ground</label>
+  <input type="range" id="ground-slider" min="10" max="60" step="5" value="10">
+  <output id="ground-display">10°</output>
+</div>
+```
+
+It works with or without a photo (without one, there is simply more green ground).
+
+**`js/main.js`**:
+
+- Add `groundDeg: 10` to `state`.
+- A function `applyGround(deg)` that:
+  - sets `state.groundDeg = deg`,
+  - sets the slider's value and `#ground-display` (for example `25°`),
+  - sets `horizonCanvas.style.aspectRatio = '240 / ' + (70 + deg)`. At 10° that is 240 / 80 = 3 / 1, as now. Each degree is a quarter taller than it is wide, as before.
+  - saves it: `try { localStorage.setItem('sunworld.groundDeg', String(deg)); } catch {}`.
+- On load, call `applyGround` with the saved value if it is a number from 10 to 60 (read inside `try`), otherwise 10.
+- `#ground-slider` `input` event: `applyGround(Number(slider.value))`.
+
+**`style.css`**: `#ground-control` lays out like the time slider (label, slider ~160px, value). Remove `aspect-ratio: 3 / 1` from `#horizon` (JavaScript sets it now), but keep `width: 100%`.
+
+**Done when**
+
+- [ ] All earlier checks still pass, in particular Step 5's `azAltToXY` check and Step 14's `panoCropRects` checks.
+- [ ] `node -e "import('./js/horizon.js').then(m => console.log(JSON.stringify([m.azAltToXY(30, 70, 1000, 400), m.azAltToXY(180, 0, 1000, 400, -40), m.azAltToXY(330, -40, 1000, 400, -40)].map(p => [p.x, +p.y.toFixed(3)]))))"` prints `[[0,0],[500,254.545],[1000,400]]`
+- [ ] `node -e "import('./js/pano.js').then(m => { const r = o => JSON.stringify(o, (k, v) => typeof v === 'number' ? Math.round(v * 1000) / 1000 : v); const full = m.panoMeta({}, 4096, 2048), part = m.panoMeta({ FullPanoWidthPixels: 19490, FullPanoHeightPixels: 9745, CroppedAreaImageWidthPixels: 19490, CroppedAreaLeftPixels: 0, CroppedAreaTopPixels: 1620 }, 4096, 1367); console.log(m.STRIP_LOW, m.STRIP_FULL_H, [10, 30, 60].map(g => m.stripSourceHeight(g)).join(' ')); console.log(r(m.panoCropRects(full, 0.5, 2400, 1300, -60))); console.log(r(m.panoCropRects(part, 0.5, 2400, 1300, -60))); })"` prints:
+  ```
+  -60 1300 800 1000 1300
+  [{"sx":341.333,"sy":227.556,"sw":3413.333,"sh":1479.111,"dx":0,"dy":0,"dw":2400,"dh":1300}]
+  [{"sx":341.333,"sy":0,"sw":3413.333,"sh":1366.209,"dx":0,"dy":99.23,"dw":2400,"dh":1200.77}]
+  ```
+- [ ] `node -e "const fs = require('fs'), z = fs.readFileSync('js/horizon.js', 'utf8'), p = fs.readFileSync('js/pano-ui.js', 'utf8'), m = fs.readFileSync('js/main.js', 'utf8'), h = fs.readFileSync('index.html', 'utf8'), calls = [...z.matchAll(/azAltToXY\(([^()]*)\)/g)]; console.log(calls.length > 4 && calls.every(c => c[1].split(',').length === 5), /70\s*\/\s*80|\/\s*80\b/.test(z), /stripSourceHeight\(\s*state\.groundDeg\s*\)/.test(z), /panoCropRects\([^)]*STRIP_LOW\s*\)/.test(p), /STRIP_FULL_H/.test(p), /groundDeg:\s*10/.test(m), /aspectRatio/.test(m), m.includes('sunworld.groundDeg'), /id=\"ground-slider\" min=\"10\" max=\"60\" step=\"5\" value=\"10\"/.test(h))"` prints `true false true true true true true true true`
+- [ ] (browser) Horizon view, no photo: moving Ground from 10° to 60° makes the view taller with more green below; the sun, the arcs and the compass labels stay in the same place relative to the horizon line, and nothing is squashed.
+- [ ] (browser) With the drone photo loaded: at 40–60° the streets and buildings below the drone come into view, and the S line on the preview still matches the S label on the horizon.
+- [ ] (browser) Reload: the Ground setting and the photo are both remembered, and the photo is drawn at the new depth.
+- [ ] (browser) The night overlay still covers the whole (taller) view.
