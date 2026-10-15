@@ -2,7 +2,7 @@
 
 import { normalisePostcode, formatLatLon, advanceTime, sunEvents } from './geo.js';
 import { lookupPostcode } from './postcode.js';
-import { createGlobe, setMarker, updateGlobe } from './globe.js';
+import { createGlobe, setMarker, updateGlobe, setGlobeMode, getGlobeMode } from './globe.js';
 import { drawHorizon } from './horizon.js';
 
 const state = {
@@ -112,6 +112,20 @@ function setSeason(month, day) {
 midsummerBtn.addEventListener('click', () => setSeason(6, 21));
 midwinterBtn.addEventListener('click', () => setSeason(12, 21));
 equinoxBtn.addEventListener('click', () => setSeason(3, 20));
+
+// Orbit / Spin toggle
+const orbitSpinBtn = document.getElementById('orbit-spin-btn');
+
+orbitSpinBtn.addEventListener('click', () => {
+  if (getGlobeMode() === 'orbit') {
+    setGlobeMode('spin');
+    orbitSpinBtn.textContent = 'Sun orbits';
+  } else {
+    setGlobeMode('orbit');
+    orbitSpinBtn.textContent = 'Earth spins';
+  }
+  updateGlobe(state);
+});
 
 // UK time formatter for sunrise/sunset times
 const ukTimeFmt = new Intl.DateTimeFormat('en-GB', {

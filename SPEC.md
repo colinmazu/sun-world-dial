@@ -428,3 +428,145 @@ jobs:
 - [ ] `test -f .github/workflows/deploy.yml && echo "workflow exists"` prints `workflow exists`
 - [ ] `grep -c '<base' index.html` prints `0` (no base tag that would break relative paths)
 - [ ] (browser/GitHub) After pushing to `main` and enabling Pages, the site loads at `https://<user>.github.io/<repo>/` with globe, horizon, and postcode lookup all working.
+
+---
+
+## Step 10: Orbit / Spin view toggle
+
+Two ways to show the day-night cycle on the globe:
+
+- **Sun orbits** (default): the Earth stays fixed in the frame and the sun mesh and light move to `subsolarPoint(state.simTime)` each frame. This is the current behaviour; don't change it.
+- **Earth spins**: the sun mesh and light stay fixed at `(3, 0, 0)`, to the right of the globe. The Earth (with the marker) turns on its axis, and the axis leans toward or away from the sun with the season (north pole toward the sun in June, away in December). The result must light exactly the same places as orbit mode at the same `simTime`.
+
+Spin mode reuses `subsolarPoint`, so the Earth's angles come from the same verified formula as the sun's position. Do **not** compute hours from `getUTCHours()` / `getUTCMinutes()` / `getUTCSeconds()` yourself, and do **not** use `rotation.x` for the tilt (that leans the axis toward the camera, not the sun).
+
+**`js/geo.js`**: add
+
+```js
+/** Rotation (radians) that turns the globe so the subsolar point faces +x, where the fixed sun is. */
+export function spinAngles(date) {
+  const s = subsolarPoint(date);
+  return { y: Math.PI / 2 - s.lon * Math.PI / 180, z: -s.lat * Math.PI / 180 };
+}
+```
+
+`y` spins the Earth about its own axis; `z` leans the axis toward the sun by the subsolar latitude. They must be applied **y first, then z**, which in Three.js is Euler order `'ZYX'`.
+
+**`index.html`**: in `#sun-controls`, after the Equinox button and before `#sim-clock`, add:
+
+```html
+<button id="orbit-spin-btn" type="button">Earth spins</button>
+```
+
+The text is "Earth spins" in orbit mode and "Sun orbits" in spin mode (the button names the mode it switches *to*).
+
+**`js/globe.js`**:
+
+- Add a module-level `globeGroup = new THREE.Group()` with `globeGroup.rotation.order = 'ZYX'`. In `createGlobe`, add `earth` to `globeGroup` (not to `scene`) and add `globeGroup` to `scene`. Keep `earth.rotation.y = -Math.PI / 2` as it is; the group rotates on top of it.
+- In `setMarker`, add and remove `markerGroup` on `globeGroup` instead of `scene`, so the marker turns with the Earth. Marker positions stay as they are (`latLonToVector3`).
+- Add `let mode = 'orbit';` and export:
+  - `setGlobeMode(m)`: sets `mode` to `'orbit'` or `'spin'`.
+  - `getGlobeMode()`: returns `mode`.
+- In `updateGlobe(state)`:
+  - **orbit**: `globeGroup.rotation.set(0, 0, 0)`, then place the sun mesh and light at `latLonToVector3(sp.lat, sp.lon, 3)` as now.
+  - **spin**: `const a = spinAngles(state.simTime); globeGroup.rotation.set(0, a.y, a.z);` and place the sun mesh and light at `(3, 0, 0)`.
+- Import `spinAngles` from `./geo.js`.
+
+**`js/main.js`**:
+
+- Import `setGlobeMode` and `getGlobeMode`.
+- `#orbit-spin-btn` click: if `getGlobeMode() === 'orbit'`, call `setGlobeMode('spin')` and set the text to "Sun orbits"; otherwise `setGlobeMode('orbit')` and "Earth spins". Then call `updateGlobe(state)` once, so the change shows straight away while paused.
+
+**Done when**
+
+- [ ] `node -e "import('./js/geo.js').then(m => ['2026-06-21T12:00:00Z','2026-06-21T18:00:00Z','2026-12-21T12:00:00Z','2026-03-20T06:00:00Z'].forEach(s => { const a = m.spinAngles(new Date(s)); console.log(s, a.y.toFixed(3), a.z.toFixed(3)); }))"` prints:
+  ```
+  2026-06-21T12:00:00Z 1.563 -0.409
+  2026-06-21T18:00:00Z 3.133 -0.409
+  2026-12-21T12:00:00Z 1.579 0.409
+  2026-03-20T06:00:00Z -0.033 0.002
+  ```
+- [ ] This check turns the subsolar point by those angles (y first, then z) and must land on the sun at `1.000 0.000 0.000` for every date: `node -e "import('./js/geo.js').then(m => ['2026-06-21T12:00:00Z','2026-06-21T18:00:00Z','2026-12-21T12:00:00Z'].forEach(s => { const d = new Date(s), a = m.spinAngles(d), p = m.subsolarPoint(d), v = m.latLonToVector3(p.lat, p.lon, 1); const x = v.x*Math.cos(a.y) + v.z*Math.sin(a.y), z = -v.x*Math.sin(a.y) + v.z*Math.cos(a.y); console.log(s, (x*Math.cos(a.z) - v.y*Math.sin(a.z)).toFixed(3), (x*Math.sin(a.z) + v.y*Math.cos(a.z)).toFixed(3), z.toFixed(3)); }))"` (`-0.000` counts as `0.000`)
+- [ ] `node -e "const g = require('fs').readFileSync('js/globe.js', 'utf8'); console.log(/rotation\.order\s*=\s*['\"]ZYX['\"]/.test(g), /globeGroup\.add\(\s*markerGroup/.test(g), /getUTC(Hours|Minutes|Seconds)/.test(g))"` prints `true true false`
+- [ ] (browser) Default view: the sun orbits a fixed Earth, exactly as before.
+- [ ] (browser) Click "Earth spins": the sun jumps to the right of the globe and stays there; the lit half of the Earth covers the same places as before the click (the red marker is in day or night just as it was), and the marker turns with the Earth.
+- [ ] (browser) Midsummer button in spin mode: the north pole leans toward the sun (the Arctic is lit all round). Midwinter: it leans away.
+- [ ] (browser) Play in spin mode: the Earth turns west to east (Europe moves toward the sun on the right, then into the night), once per simulated day.
+- [ ] (browser) Click "Sun orbits": back to the default view. Drag and zoom work in both modes.
+
+---
+
+## Step 11: The tilt stays the same; its direction turns with the year
+
+Step 10 leans the axis toward the sun by the subsolar latitude, so at the equinox the axis stands upright and the tilt seems to come and go. In reality the tilt is always 23.4°. What changes over the year is **which way it leans relative to the sun**:
+
+- **June solstice:** the north pole leans toward the sun (right). The Arctic is lit all day.
+- **September equinox:** it leans toward the viewer. Neither pole is favoured.
+- **December solstice:** it leans away from the sun (left). The Arctic is dark all day.
+- **March equinox:** it leans away from the viewer.
+
+This step makes spin mode show that, and draws the axis so it can be seen. Orbit mode does not change.
+
+**`js/geo.js`**: replace `spinAngles` with this version (copy it exactly; it uses the same formulas as `subsolarPoint`):
+
+```js
+/** Angles (radians) for the "Earth spins" view, where the sun is fixed at +x and the camera looks from +z. */
+export function spinAngles(date) {
+  const r = Math.PI / 180;
+  const d = date.getTime() / 86400000 - 10957.5;
+  const g = (357.529 + 0.98560028 * d) * r;
+  const q = 280.459 + 0.98564736 * d;
+  const L = (q + 1.915 * Math.sin(g) + 0.020 * Math.sin(2 * g)) * r; // the sun's ecliptic longitude
+  const e = (23.439 - 0.00000036 * d) * r;                            // the axial tilt
+  const ra = Math.atan2(Math.cos(e) * Math.sin(L), Math.cos(L));      // the sun's right ascension
+  const wrap = a => Math.atan2(Math.sin(a), Math.cos(a));             // into -π..π
+  return {
+    year: wrap(Math.PI / 2 - L),                 // turns the direction of the lean as the year goes on
+    tilt: -e,                                    // leans the axis by 23.4°
+    spin: wrap(ra - subsolarPoint(date).lon * r), // turns the Earth so the subsolar point faces the sun
+  };
+}
+```
+
+**`js/globe.js`**: three nested groups, outermost first:
+
+```
+yearGroup   (rotation.y = a.year)   ← in scene
+  tiltGroup (rotation.z = a.tilt)   ← also holds the axis line
+    globeGroup (rotation.y = a.spin) ← earth + markerGroup, as now
+```
+
+- Create `yearGroup` and `tiltGroup` as module-level `THREE.Group`s in `createGlobe`. Add `globeGroup` to `tiltGroup`, `tiltGroup` to `yearGroup`, and `yearGroup` to `scene` (not `globeGroup` directly).
+- Remove `globeGroup.rotation.order = 'ZYX'`; each group now turns about one axis only, so the default order is fine.
+- **Axis line:** a module-level `axisLine`, a `THREE.Line` from `(0, -1.4, 0)` to `(0, 1.4, 0)` with `LineBasicMaterial({ color: 0xffffff })`, added to `tiltGroup` (so it tilts but doesn't spin). Hidden in orbit mode, shown in spin mode.
+- `updateGlobe(state)`:
+  - **orbit:** set all three groups' rotations to `(0, 0, 0)`, `axisLine.visible = false`, and move the sun as now.
+  - **spin:** `const a = spinAngles(state.simTime);` then `yearGroup.rotation.set(0, a.year, 0)`, `tiltGroup.rotation.set(0, 0, a.tilt)`, `globeGroup.rotation.set(0, a.spin, 0)`, `axisLine.visible = true`, and the sun mesh and light at `(3, 0, 0)`.
+- Don't use `getUTCHours` / `getUTCMinutes` / `getUTCSeconds` in `globe.js`.
+
+No changes to `index.html` or `main.js`.
+
+**Done when**
+
+- [ ] `node -e "import('./js/geo.js').then(m => ['2026-03-20T12:00:00Z','2026-06-21T12:00:00Z','2026-06-21T18:00:00Z','2026-09-23T12:00:00Z','2026-12-21T12:00:00Z'].forEach(s => { const a = m.spinAngles(new Date(s)); console.log(s, a.year.toFixed(3), a.tilt.toFixed(3), a.spin.toFixed(3)); }))"` prints:
+  ```
+  2026-03-20T12:00:00Z 1.573 -0.409 -0.034
+  2026-06-21T12:00:00Z -0.002 -0.409 1.566
+  2026-06-21T18:00:00Z -0.007 -0.409 3.141
+  2026-09-23T12:00:00Z -1.579 -0.409 -3.101
+  2026-12-21T12:00:00Z -3.135 -0.409 -1.570
+  ```
+- [ ] This check applies the three rotations (spin, then tilt, then year) to the subsolar point and to the north pole. The sun must always land on `1.000 0.000 0.000`. The axis must always have y = `0.918` (a constant 23.4° tilt) and lean toward the viewer (+z) in September, toward the sun (+x) in June, and so on: `node -e "import('./js/geo.js').then(m => { const ry = (a, v) => ({ x: v.x*Math.cos(a) + v.z*Math.sin(a), y: v.y, z: -v.x*Math.sin(a) + v.z*Math.cos(a) }), rz = (a, v) => ({ x: v.x*Math.cos(a) - v.y*Math.sin(a), y: v.x*Math.sin(a) + v.y*Math.cos(a), z: v.z }), f = v => [v.x, v.y, v.z].map(n => (n + 0).toFixed(3)).join(' '); ['2026-03-20T12:00:00Z','2026-06-21T12:00:00Z','2026-09-23T12:00:00Z','2026-12-21T12:00:00Z'].forEach(s => { const d = new Date(s), a = m.spinAngles(d), p = m.subsolarPoint(d), R = v => ry(a.year, rz(a.tilt, ry(a.spin, v))); console.log(s, 'sun', f(R(m.latLonToVector3(p.lat, p.lon, 1))), 'axis', f(R({ x: 0, y: 1, z: 0 }))); }); })"` prints:
+  ```
+  2026-03-20T12:00:00Z sun 1.000 0.000 0.000 axis -0.001 0.918 -0.398
+  2026-06-21T12:00:00Z sun 1.000 0.000 0.000 axis 0.398 0.918 0.001
+  2026-09-23T12:00:00Z sun 1.000 0.000 0.000 axis -0.003 0.918 0.398
+  2026-12-21T12:00:00Z sun 1.000 0.000 0.000 axis -0.398 0.918 0.003
+  ```
+  (`-0.000` counts as `0.000`)
+- [ ] `node -e "const g = require('fs').readFileSync('js/globe.js', 'utf8'); console.log(/yearGroup/.test(g), /tiltGroup\.add\(\s*globeGroup/.test(g), /tiltGroup\.add\(\s*axisLine/.test(g), /ZYX/.test(g), /getUTC(Hours|Minutes|Seconds)/.test(g))"` prints `true true true false false`
+- [ ] (browser) Spin mode, Midsummer: a white axis line through the poles leans toward the sun on the right; the Arctic is lit all round.
+- [ ] (browser) Spin mode, Midwinter: the same lean, but away from the sun (left); the Arctic is dark.
+- [ ] (browser) Spin mode, Equinox (20 March): the axis leans away from you, neither toward nor away from the sun; the day/night line runs through both poles. The lean looks just as big as at the solstices (drag the view sideways to see it).
+- [ ] (browser) Spin mode, Play: the Earth turns about the white line, and the line itself barely moves during a day.
+- [ ] (browser) Orbit mode: no axis line, and everything is exactly as before Step 11.

@@ -78,6 +78,12 @@ export function sunEvents(date, lat, lon) {
   return { sunrise: times.sunrise, sunset: times.sunset, sunriseAz, sunsetAz };
 }
 
+/** Rotation (radians) that turns the globe so the subsolar point faces +x, where the fixed sun is. */
+export function spinAngles(date) {
+  const s = subsolarPoint(date);
+  return { y: Math.PI / 2 - s.lon * Math.PI / 180, z: -s.lat * Math.PI / 180 };
+}
+
 /** Return an array of { az, alt } points for the sun path every 10 minutes on a UK calendar day. */
 export function sunPath(date, lat, lon) {
   // Determine the UK calendar date for this moment.

@@ -2,11 +2,13 @@
 
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { latLonToVector3, subsolarPoint } from './geo.js';
+import { latLonToVector3, subsolarPoint, spinAngles } from './geo.js';
 
 let scene, camera, renderer, earth;
+let globeGroup = null;
 let markerGroup = null;
 let sunMesh, sunLight;
+let mode = 'orbit';
 
 /** Build the globe inside the given container element. */
 export function createGlobe(container) {
@@ -42,7 +44,12 @@ export function createGlobe(container) {
   );
   // Rotate so longitude 0° faces +z (toward the viewer)
   earth.rotation.y = -Math.PI / 2;
-  scene.add(earth);
+
+  // Globe group holds earth and marker; rotation order 'ZYX' for spin mode.
+  globeGroup = new THREE.Group();
+  globeGroup.rotation.order = 'ZYX';
+  globeGroup.add(earth);
+  scene.add(globeGroup);
 
   // Lighting — dim ambient, bright directional from the sun
   const ambient = new THREE.AmbientLight(0xffffff, 0.15);
@@ -76,7 +83,7 @@ export function createGlobe(container) {
 /** Place (or move) a red marker at the given lat/lon on the globe. */
 export function setMarker(lat, lon) {
   if (markerGroup) {
-    scene.remove(markerGroup);
+    globeGroup.remove(markerGroup);
     markerGroup = null;
   }
   const pos  = latLonToVector3(lat, lon, 1.01);
@@ -101,13 +108,31 @@ export function setMarker(lat, lon) {
   const line = new THREE.Line(lineGeo, new THREE.LineBasicMaterial({ color: 0xff3333 }));
   markerGroup.add(line);
 
-  scene.add(markerGroup);
+  globeGroup.add(markerGroup);
 }
 
-/** Move the sun mesh and directional light to the subsolar point for state.simTime. */
+/** Move the sun mesh and directional light based on the current mode. */
 export function updateGlobe(state) {
-  const sp = subsolarPoint(state.simTime);
-  const pos = latLonToVector3(sp.lat, sp.lon, 3);
-  sunMesh.position.set(pos.x, pos.y, pos.z);
-  sunLight.position.copy(sunMesh.position);
+  if (mode === 'orbit') {
+    globeGroup.rotation.set(0, 0, 0);
+    const sp = subsolarPoint(state.simTime);
+    const pos = latLonToVector3(sp.lat, sp.lon, 3);
+    sunMesh.position.set(pos.x, pos.y, pos.z);
+    sunLight.position.copy(sunMesh.position);
+  } else {
+    const a = spinAngles(state.simTime);
+    globeGroup.rotation.set(0, a.y, a.z);
+    sunMesh.position.set(3, 0, 0);
+    sunLight.position.set(3, 0, 0);
+  }
+}
+
+/** Switch between "orbit" and "spin" visualisation modes. */
+export function setGlobeMode(m) {
+  mode = m;
+}
+
+/** Return the current mode string ("orbit" or "spin"). */
+export function getGlobeMode() {
+  return mode;
 }
