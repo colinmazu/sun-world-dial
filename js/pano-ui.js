@@ -410,6 +410,11 @@ export function initPano(state, { onLocation, onTime }) {
 
       panoStatus.textContent = `Using the saved photo: ${info.name || 'unknown'}.`;
     };
+    image.onerror = () => {
+      try { localStorage.removeItem('sunworld.horizonPhoto'); } catch {}
+      try { localStorage.removeItem('sunworld.horizonPhotoInfo'); } catch {}
+      panoStatus.textContent = "Saved photo couldn't be read.";
+    };
     image.src = bandData;
   })();
 }

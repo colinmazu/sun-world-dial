@@ -44,6 +44,7 @@ form.addEventListener('submit', async (e) => {
     result.textContent = loc.postcode + ': ' + formatLatLon(loc.lat, loc.lon);
     setMarker(state.lat, state.lon);
     updateSunTimes();
+    markDirty();
   } catch (err) {
     if (err instanceof TypeError && err.message.includes('fetch')) {
       result.textContent = "Couldn't reach the postcode service.";
@@ -89,6 +90,7 @@ function setTimeFromSlider(minuteOfDay) {
   // Start of UK day in UTC ms
   const startMs = Date.UTC(parts[0], parts[1] - 1, parts[2]) - offsetHours * 3600000;
   state.simTime = new Date(startMs + minuteOfDay * 60000);
+  markDirty();
 }
 
 // Initialise slider to match current simTime on load.
@@ -112,6 +114,7 @@ function setSeason(month, day) {
   state.simTime = new Date(utcNoon.getTime() - offsetHours * 3600000);
   state.playing = false;
   playBtn.textContent = 'Play';
+  markDirty();
 }
 
 midsummerBtn.addEventListener('click', () => setSeason(6, 21));
@@ -175,6 +178,11 @@ const ukFmt = new Intl.DateTimeFormat('en-GB', {
   hour: '2-digit', minute: '2-digit', timeZoneName: 'short',
 });
 
+// UK formatter for the date input (YYYY-MM-DD parts)
+const ukDateFmt = new Intl.DateTimeFormat('en-GB', {
+  timeZone: 'Europe/London', year: 'numeric', month: '2-digit', day: '2-digit',
+});
+
 // Set date input to today (UK calendar) on load.
 // <input type="date"> requires YYYY-MM-DD, so use ISO and slice the prefix.
 const ukIso = new Intl.DateTimeFormat('en-GB', {
@@ -211,6 +219,7 @@ dateInput.addEventListener('change', () => {
   }).format(utc);
   const ukOffsetHours = Number(utcHour) - 12; // difference from UTC noon
   state.simTime = new Date(utc.getTime() - ukOffsetHours * 3600000);
+  markDirty();
 });
 
 const groundSlider = document.getElementById('ground-slider');
@@ -224,6 +233,7 @@ function applyGround(deg) {
   horizonCanvas.style.aspectRatio = '240 / ' + (70 + deg);
   horizonCanvas.style.setProperty('--hr', String(240 / (70 + deg)));
   try { localStorage.setItem('sunworld.groundDeg', String(deg)); } catch {}
+  markDirty();
 }
 
 // Load saved ground setting or default to 10.
@@ -243,6 +253,11 @@ groundSlider.addEventListener('input', () => {
 createGlobe(document.getElementById('globe'));
 
 let lastTs = null;
+let dirty = true; // redraw globe, horizon, and UI when state has changed
+
+function markDirty() {
+  dirty = true;
+}
 
 function tick(ts) {
   requestAnimationFrame(tick);
@@ -253,42 +268,45 @@ function tick(ts) {
         const r = advanceByDays(state.simTime, state.carryMs, elapsedMs, state.yearMs);
         state.simTime = r.simTime;
         state.carryMs = r.carryMs;
+        dirty = true;
       } else {
         state.simTime = advanceTime(state.simTime, elapsedMs, state.dayMs);
+        dirty = true;
       }
     }
-    updateGlobe(state);
+    if (dirty) {
+      updateGlobe(state);
 
-    // Draw horizon if visible
-    if (!horizonCanvas.hidden) {
-      drawHorizon(horizonCanvas, state);
-    }
+      // Draw horizon if visible
+      if (!horizonCanvas.hidden) {
+        drawHorizon(horizonCanvas, state);
+      }
 
-    // Update clock
-    simClock.textContent = ukFmt.format(state.simTime);
+      // Update clock
+      simClock.textContent = ukFmt.format(state.simTime);
 
-    // Sync time slider and display from simTime (only update slider during playback)
-    const currentMin = ukMinuteOfDay(state.simTime);
-    if (state.playing && timeSlider.value !== String(currentMin)) {
-      timeSlider.value = currentMin;
-    }
-    const hh = String(Math.floor(currentMin / 60)).padStart(2, '0');
-    const mm = String(currentMin % 60).padStart(2, '0');
-    if (timeDisplay.textContent !== hh + ':' + mm) {
-      timeDisplay.textContent = hh + ':' + mm;
-    }
+      // Sync time slider and display from simTime (only update slider during playback)
+      const currentMin = ukMinuteOfDay(state.simTime);
+      if (state.playing && timeSlider.value !== String(currentMin)) {
+        timeSlider.value = currentMin;
+      }
+      const hh = String(Math.floor(currentMin / 60)).padStart(2, '0');
+      const mm = String(currentMin % 60).padStart(2, '0');
+      if (timeDisplay.textContent !== hh + ':' + mm) {
+        timeDisplay.textContent = hh + ':' + mm;
+      }
 
-    // Sync date input when the simulated day changes
-    const dp = new Intl.DateTimeFormat('en-GB', {
-      timeZone: 'Europe/London', year: 'numeric', month: '2-digit', day: '2-digit',
-    }).formatToParts(state.simTime);
-    const currentDateStr =
-      dp.find(p => p.type === 'year').value.padStart(4, '0') + '-' +
-      dp.find(p => p.type === 'month').value + '-' +
-      dp.find(p => p.type === 'day').value;
-    if (dateInput.value !== currentDateStr) {
-      dateInput.value = currentDateStr;
-      updateSunTimes();
+      // Sync date input when the simulated day changes
+      const dp = ukDateFmt.formatToParts(state.simTime);
+      const currentDateStr =
+        dp.find(p => p.type === 'year').value.padStart(4, '0') + '-' +
+        dp.find(p => p.type === 'month').value + '-' +
+        dp.find(p => p.type === 'day').value;
+      if (dateInput.value !== currentDateStr) {
+        dateInput.value = currentDateStr;
+        updateSunTimes();
+      }
+      dirty = false;
     }
   }
   lastTs = ts;
@@ -305,12 +323,14 @@ initPano(state, {
     result.textContent = label + ': ' + formatLatLon(lat, lon);
     setMarker(lat, lon);
     updateSunTimes();
+    markDirty();
   },
   onTime(date) {
     state.simTime = date;
     state.playing = false;
     playBtn.textContent = 'Play';
     timeSlider.value = ukMinuteOfDay(date);
+    markDirty();
     updateSunTimes();
   },
 });
