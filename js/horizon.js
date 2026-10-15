@@ -1,13 +1,13 @@
 // 2D horizon canvas — no Three.js.
 
 import { sunAltAz, sunPath, sunEvents } from './geo.js';
-import { uForAz } from './pano.js';
+import { uForAz, nightAlpha, stripSourceHeight } from './pano.js';
 
 /** Convert azimuth/altitude to pixel coordinates on the horizon canvas. */
-export function azAltToXY(az, alt, width, height) {
+export function azAltToXY(az, alt, width, height, bottom = -10) {
   return {
     x: (az - 30) / 300 * width,
-    y: (70 - alt) / 80 * height,
+    y: (70 - alt) / (70 - bottom) * height,
   };
 }
 
@@ -32,6 +32,7 @@ export function drawHorizon(canvas, state) {
   }
 
   const { alt, az } = sunAltAz(state.simTime, state.lat, state.lon);
+  const bottom = -state.groundDeg;
 
   // Sky gradient based on sun altitude
   let topColor, bottomColor;
@@ -46,8 +47,8 @@ export function drawHorizon(canvas, state) {
     bottomColor = '#cfe8ff';
   }
 
-  // Horizon line is at alt = 0 → y = (70 - 0) / 80 * h = 70/80 * h
-  const horizonY = (70 / 80) * h;
+  // Horizon line is at alt = 0
+  const horizonY = azAltToXY(180, 0, w, h, bottom).y;
 
   // Sky
   const skyGrad = ctx.createLinearGradient(0, 0, 0, horizonY);
@@ -58,10 +59,11 @@ export function drawHorizon(canvas, state) {
 
   // Ground — replaced by photo if available
   if (state.horizonPhoto) {
-    ctx.drawImage(state.horizonPhoto, 0, 0, w, h);
+    ctx.drawImage(state.horizonPhoto, 0, 0, w, stripSourceHeight(state.groundDeg), 0, 0, w, h);
 
-    // Night overlay: darken the photo where it is dark at each azimuth column.
-    drawNightOverlay(ctx, state, w, h);
+    // Night overlay: one fill over the whole canvas
+    ctx.fillStyle = `rgba(6,10,31,${nightAlpha(alt)})`;
+    ctx.fillRect(0, 0, w, h);
   } else {
     ctx.fillStyle = '#2f4a2f';
     ctx.fillRect(0, horizonY, w, h - horizonY);
@@ -78,12 +80,26 @@ export function drawHorizon(canvas, state) {
     { az: 315, text: 'NW' },
   ];
 
-  ctx.fillStyle = alt < 0 ? '#cfe8ff' : '#1a1a1a';
-  ctx.font = '12px system-ui, sans-serif';
-  ctx.textAlign = 'center';
-  for (const l of labels) {
-    const px = (l.az - 30) / 300 * w;
-    ctx.fillText(l.text, px, horizonY + 14);
+  if (state.horizonPhoto) {
+    // Labels with dark outline for readability on photos
+    ctx.font = '12px system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = 'rgba(0,0,0,0.7)';
+    for (const l of labels) {
+      const px = azAltToXY(l.az, 0, w, h, bottom).x;
+      ctx.strokeText(l.text, px, horizonY + 14);
+      ctx.fillStyle = '#fff';
+      ctx.fillText(l.text, px, horizonY + 14);
+    }
+  } else {
+    ctx.fillStyle = alt < 0 ? '#cfe8ff' : '#1a1a1a';
+    ctx.font = '12px system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    for (const l of labels) {
+      const px = azAltToXY(l.az, 0, w, h, bottom).x;
+      ctx.fillText(l.text, px, horizonY + 14);
+    }
   }
 
   // --- Sun paths ---
@@ -102,10 +118,10 @@ export function drawHorizon(canvas, state) {
     ctx.lineWidth = lineWidth;
     if (dashed) ctx.setLineDash([6, 4]);
     else ctx.setLineDash([]);
-    const start = azAltToXY(points[0].az, points[0].alt, w, h);
+    const start = azAltToXY(points[0].az, points[0].alt, w, h, bottom);
     ctx.moveTo(start.x, start.y);
     for (let i = 1; i < points.length; i++) {
-      const p = azAltToXY(points[i].az, points[i].alt, w, h);
+      const p = azAltToXY(points[i].az, points[i].alt, w, h, bottom);
       ctx.lineTo(p.x, p.y);
     }
     ctx.stroke();
@@ -132,7 +148,7 @@ export function drawHorizon(canvas, state) {
   function labelPath(points, text) {
     if (points.length === 0) return;
     const top = points.reduce((a, b) => b.alt > a.alt ? b : a);
-    const p = azAltToXY(top.az, top.alt, w, h);
+    const p = azAltToXY(top.az, top.alt, w, h, bottom);
     ctx.fillStyle = guideText;
     ctx.fillText(text, p.x, p.y - 8);
   }
@@ -145,8 +161,8 @@ export function drawHorizon(canvas, state) {
     timeZone: 'Europe/London', hour: '2-digit', minute: '2-digit',
   });
 
-  function drawTick(az, time) {
-    const px = (az - 30) / 300 * w;
+  function drawTick(azimuth, time) {
+    const px = azAltToXY(azimuth, 0, w, h, bottom).x;
     ctx.strokeStyle = '#ffd23f';
     ctx.lineWidth = 1.5;
     ctx.beginPath();
@@ -162,58 +178,11 @@ export function drawHorizon(canvas, state) {
   drawTick(ev.sunsetAz, ev.sunset);
 
   // Sun
-  if (alt > -10) {
-    const sunPos = azAltToXY(az, alt, w, h);
+  if (alt > bottom) {
+    const sunPos = azAltToXY(az, alt, w, h, bottom);
     ctx.beginPath();
     ctx.arc(sunPos.x, sunPos.y, 12, 0, Math.PI * 2);
     ctx.fillStyle = '#ffd23f';
     ctx.fill();
-  }
-}
-
-/** Draw a per-column night-darkening overlay on the photo. */
-function drawNightOverlay(ctx, state, w, h) {
-  // For each pixel column, find the azimuth and compute sun altitude there.
-  const cols = Math.min(w, 240);
-  const colW = w / cols;
-
-  for (let i = 0; i < cols; i++) {
-    // Azimuth at this column: x = (az - 30) / 300 * w → az = 30 + (x / w) * 300
-    const cx = i * colW + colW / 2;
-    const az = 30 + (cx / w) * 300;
-
-    // Compute sun altitude at this azimuth by finding the time when the sun is at this bearing.
-    // We use a simpler approach: compute darkness from the current sun position relative to this column's azimuth.
-    // The sun moves ~15°/hour in longitude, so we can estimate how far the sun is from this direction.
-    const { alt: curAlt, az: curAz } = sunAltAz(state.simTime, state.lat, state.lon);
-
-    // Angular distance between current sun azimuth and this column's azimuth (shortest arc).
-    let dAz = Math.abs(curAz - az) % 360;
-    if (dAz > 180) dAz = 360 - dAz;
-
-    // Darkness depends on how far the sun is from this direction and its altitude.
-    // When the sun is well above the horizon, it illuminates all directions → no darkening.
-    // As the sun goes below the horizon, darkness spreads from the opposite side.
-    let alpha = 0;
-
-    if (curAlt < 0) {
-      // Sun is below horizon — darken based on distance from sun's azimuth.
-      // Columns near the sun's azimuth are brighter (twilight glow), columns opposite are darker.
-      const maxDist = 180;
-      const brightness = Math.max(0, 1 - dAz / maxDist);
-      // The lower the sun goes, the more everything darkens.
-      const depthFactor = Math.min(1, Math.abs(curAlt) / 30);
-      alpha = (0.85 - 0.4 * brightness) * depthFactor;
-    } else if (curAlt < 6) {
-      // Low sun — slight warm glow on the opposite side.
-      const maxDist = 180;
-      const oppGlow = Math.max(0, (dAz - 90) / 90);
-      alpha = -0.05 * oppGlow * (6 - curAlt) / 6; // slight brightening on opposite side
-    }
-
-    if (alpha > 0) {
-      ctx.fillStyle = `rgba(0, 0, 10, ${Math.min(alpha, 0.85)})`;
-      ctx.fillRect(i * colW, 0, colW + 1, h);
-    }
   }
 }

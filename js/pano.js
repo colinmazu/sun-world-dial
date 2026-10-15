@@ -1,8 +1,12 @@
 // Panorama maths — pure functions only, no browser APIs.
 
-/** Size of the horizon strip (3:1). */
+/** Size of the horizon strip (3:1 at default ground depth). */
 export const STRIP_W = 2400;
 export const STRIP_H = 800;
+
+/** How far below the horizon the strip goes, and its full height. */
+export const STRIP_LOW = -60;
+export const STRIP_FULL_H = 1300;
 
 /** Compute where the decoded image sits on the full sphere. */
 export function panoMeta(exif, imgW, imgH) {
@@ -63,10 +67,10 @@ function clipRange(sStart, sSpan, dStart, dSpan, minS, maxS) {
 }
 
 /** Crop rectangles for the horizon strip from a panorama image. */
-export function panoCropRects(meta, southU, outW, outH) {
-  // Rows on the full sphere: alt +70° → top row, alt −10° → bottom row
-  const srcTop = meta.fullH * (90 - 70) / 180;       // altitude 70°
-  const srcBot = meta.fullH * (90 - (-10)) / 180;    // altitude −10°
+export function panoCropRects(meta, southU, outW, outH, bottom = -10) {
+  // Rows on the full sphere: alt +70° → top row, alt `bottom` → bottom row
+  const srcTop = meta.fullH * (90 - 70) / 180;           // altitude 70°
+  const srcBot = meta.fullH * (90 - bottom) / 180;       // altitude `bottom`
   const imgTop = srcTop - meta.top;
   const imgBot = srcBot - meta.top;
   const rowSpan = imgBot - imgTop;
@@ -132,4 +136,14 @@ export function exifLocalToDate(str, offset) {
   const p = t => Number(parts.find(x => x.type === t).value);
   const london = Date.UTC(p('year'), p('month') - 1, p('day'), p('hour'), p('minute'), p('second'));
   return new Date(asUtc - (london - asUtc));
+}
+
+/** How many strip rows the view needs for a given ground depth. */
+export function stripSourceHeight(groundDeg) {
+  return STRIP_FULL_H * (70 + groundDeg) / 130;
+}
+
+/** Night darkness factor from sun altitude. */
+export function nightAlpha(alt) {
+  return Math.min(Math.max(-alt / 12, 0), 1) * 0.8;
 }

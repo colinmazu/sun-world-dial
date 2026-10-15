@@ -193,7 +193,27 @@ h1 { font-size: 1.75rem; }
 
 #horizon {
   width: 100%;
-  aspect-ratio: 3 / 1;
+}
+
+/* ground control */
+#ground-control {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: center;
+  align-items: center;
+  margin: 0.5rem 0;
+}
+
+#ground-slider {
+  width: 160px;
+  accent-color: #ffd23f;
+  cursor: pointer;
+}
+
+#ground-display {
+  font-variant-numeric: tabular-nums;
+  min-width: 3ch;
+  text-align: center;
 }
 
 [hidden] { display: none !important; }

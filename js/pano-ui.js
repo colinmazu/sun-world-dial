@@ -3,7 +3,7 @@
 import { formatLatLon } from './geo.js';
 import { sunAltAz } from './geo.js';
 import { nearestPostcode } from './postcode.js';
-import { STRIP_W, STRIP_H, panoMeta, uForAz, southFromSun, uAtImageX, altAtImageY, panoCropRects, exifLocalToDate } from './pano.js';
+import { STRIP_W, STRIP_FULL_H, STRIP_LOW, panoMeta, uForAz, southFromSun, uAtImageX, altAtImageY, panoCropRects, exifLocalToDate } from './pano.js';
 
 const STORAGE_KEY = 'sunWorldDial_pano';
 
@@ -64,7 +64,7 @@ export function initPano(state, { onLocation, onTime }) {
   // Strip canvas for the horizon view
   const strip = document.createElement('canvas');
   strip.width = STRIP_W;
-  strip.height = STRIP_H;
+  strip.height = STRIP_FULL_H;
 
   // DOM elements
   const panoInput = document.getElementById('pano-input');
@@ -128,8 +128,8 @@ export function initPano(state, { onLocation, onTime }) {
   function rebuildStrip() {
     if (!img || !meta) return;
     const ctx = strip.getContext('2d');
-    ctx.clearRect(0, 0, STRIP_W, STRIP_H);
-    for (const r of panoCropRects(meta, southU, STRIP_W, STRIP_H)) {
+    ctx.clearRect(0, 0, STRIP_W, STRIP_FULL_H);
+    for (const r of panoCropRects(meta, southU, STRIP_W, STRIP_FULL_H, STRIP_LOW)) {
       ctx.drawImage(img, r.sx, r.sy, r.sw, r.sh, r.dx, r.dy, r.dw, r.dh);
     }
     state.horizonPhoto = strip;

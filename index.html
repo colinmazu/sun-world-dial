@@ -54,6 +54,11 @@
   </main>
   <details id="pano-panel">
     <summary>Horizon photo</summary>
+    <div id="ground-control">
+      <label for="ground-slider">Ground</label>
+      <input type="range" id="ground-slider" min="10" max="60" step="5" value="10">
+      <output id="ground-display">10°</output>
+    </div>
     <label for="pano-input">Load a 360° photo</label>
     <input type="file" id="pano-input" accept="image/jpeg">
     <p id="pano-status" aria-live="polite"></p>

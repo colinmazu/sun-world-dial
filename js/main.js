@@ -16,6 +16,7 @@ const state = {
   yearMs: null,
   carryMs: 0,
   horizonPhoto: null,
+  groundDeg: 10,
 };
 
 export { state };
@@ -210,6 +211,31 @@ dateInput.addEventListener('change', () => {
   }).format(utc);
   const ukOffsetHours = Number(utcHour) - 12; // difference from UTC noon
   state.simTime = new Date(utc.getTime() - ukOffsetHours * 3600000);
+});
+
+const groundSlider = document.getElementById('ground-slider');
+const groundDisplay = document.getElementById('ground-display');
+
+/** Apply a ground depth setting. */
+function applyGround(deg) {
+  state.groundDeg = deg;
+  groundSlider.value = deg;
+  groundDisplay.textContent = deg + '°';
+  horizonCanvas.style.aspectRatio = '240 / ' + (70 + deg);
+  try { localStorage.setItem('sunworld.groundDeg', String(deg)); } catch {}
+}
+
+// Load saved ground setting or default to 10.
+try {
+  const saved = Number(localStorage.getItem('sunworld.groundDeg'));
+  if (saved >= 10 && saved <= 60) applyGround(saved);
+  else applyGround(10);
+} catch {
+  applyGround(10);
+}
+
+groundSlider.addEventListener('input', () => {
+  applyGround(Number(groundSlider.value));
 });
 
 // --- Globe & animation loop ---
