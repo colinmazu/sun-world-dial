@@ -4,6 +4,7 @@ import { normalisePostcode, formatLatLon, advanceTime, advanceByDays, sunEvents 
 import { lookupPostcode } from './postcode.js';
 import { createGlobe, setMarker, updateGlobe, setGlobeMode, getGlobeMode } from './globe.js';
 import { drawHorizon } from './horizon.js';
+import { initPano } from './pano-ui.js';
 
 const state = {
   postcode: null,
@@ -14,6 +15,7 @@ const state = {
   dayMs: 24000,
   yearMs: null,
   carryMs: 0,
+  horizonPhoto: null,
 };
 
 export { state };
@@ -266,3 +268,22 @@ function tick(ts) {
 }
 
 requestAnimationFrame(tick);
+
+// --- Panorama panel ---
+initPano(state, {
+  onLocation(lat, lon, label) {
+    state.lat = lat;
+    state.lon = lon;
+    state.postcode = label;
+    result.textContent = label + ': ' + formatLatLon(lat, lon);
+    setMarker(lat, lon);
+    updateSunTimes();
+  },
+  onTime(date) {
+    state.simTime = date;
+    state.playing = false;
+    playBtn.textContent = 'Play';
+    timeSlider.value = ukMinuteOfDay(date);
+    updateSunTimes();
+  },
+});

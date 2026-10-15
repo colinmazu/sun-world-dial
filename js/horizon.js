@@ -55,9 +55,13 @@ export function drawHorizon(canvas, state) {
   ctx.fillStyle = skyGrad;
   ctx.fillRect(0, 0, w, horizonY);
 
-  // Ground
-  ctx.fillStyle = '#2f4a2f';
-  ctx.fillRect(0, horizonY, w, h - horizonY);
+  // Ground — replaced by photo if available
+  if (state.horizonPhoto) {
+    ctx.drawImage(state.horizonPhoto, 0, 0, w, h);
+  } else {
+    ctx.fillStyle = '#2f4a2f';
+    ctx.fillRect(0, horizonY, w, h - horizonY);
+  }
 
   // Direction labels just below the horizon line
   const labels = [

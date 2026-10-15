@@ -12,6 +12,7 @@
   } }
   </script>
   <script src="vendor/suncalc.js"></script>
+  <script src="vendor/exifr-lite.umd.js"></script>
 </head>
 <body>
   <header>
@@ -51,6 +52,21 @@
     </section>
     <p id="sun-times"></p>
   </main>
+  <details id="pano-panel">
+    <summary>Horizon photo</summary>
+    <label for="pano-input">Load a 360° photo</label>
+    <input type="file" id="pano-input" accept="image/jpeg">
+    <p id="pano-status" aria-live="polite"></p>
+    <canvas id="pano-preview" hidden></canvas>
+    <div id="pano-buttons">
+      <button type="button" id="pano-south-btn" disabled>Set south</button>
+      <button type="button" id="pano-sun-btn" disabled>Click the sun</button>
+      <button type="button" id="pano-left" disabled>◀ 1°</button>
+      <button type="button" id="pano-right" disabled>1° ▶</button>
+      <button type="button" id="pano-location-btn" disabled>Use photo's location</button>
+      <button type="button" id="pano-time-btn" disabled>Go to photo's time</button>
+    </div>
+  </details>
   <script type="module" src="js/main.js"></script>
 </body>
 </html>
