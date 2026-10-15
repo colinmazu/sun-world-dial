@@ -570,3 +570,128 @@ No changes to `index.html` or `main.js`.
 - [ ] (browser) Spin mode, Equinox (20 March): the axis leans away from you, neither toward nor away from the sun; the day/night line runs through both poles. The lean looks just as big as at the solstices (drag the view sideways to see it).
 - [ ] (browser) Spin mode, Play: the Earth turns about the white line, and the line itself barely moves during a day.
 - [ ] (browser) Orbit mode: no axis line, and everything is exactly as before Step 11.
+
+---
+
+## Step 12: A year in a minute
+
+A new speed, "1 year in 60 s", plays the seasons. At that speed a day lasts only 0.16 s, which is about ten frames. If time ran smoothly, the Earth would spin six times a second and flicker or seem to turn backwards. So this speed **jumps a whole day at a time and keeps the clock time the same**: the spin stays put and only the season moves. What you see:
+
+- **Spin mode:** the axis's lean turns once round per minute, and the day/night line swings across the poles (the Arctic goes from lit all round to dark all round).
+- **Orbit mode:** the sun drifts north and south between the tropics, tracing a thin figure of eight (the analemma).
+- **Horizon view:** the sun rises and falls at the same clock time, and the sun-path arc grows and shrinks.
+
+**`js/geo.js`**: add (copy exactly):
+
+```js
+/** Advance simulated time by whole days only, so the time of day stays put.
+    carryMs is real time not yet used up from earlier frames; yearMs is real ms per simulated year. */
+export function advanceByDays(simTime, carryMs, elapsedMs, yearMs) {
+  const msPerDay = yearMs / 365.2422;
+  const total = carryMs + elapsedMs;
+  const days = Math.floor(total / msPerDay);
+  return { simTime: new Date(simTime.getTime() + days * 86400000), carryMs: total - days * msPerDay };
+}
+```
+
+The carry matters: one frame (~16 ms) is less than one simulated day (~164 ms), so without it nothing would ever move.
+
+**`index.html`**: add a last option to `#speed-select`: `<option value="year60">1 year in 60 s</option>`.
+
+**`js/main.js`**:
+
+- Add to `state`: `yearMs: null` (null means the normal day speeds) and `carryMs: 0`.
+- `#speed-select` change: if the value is `"year60"`, set `state.yearMs = 60000`; otherwise set `state.yearMs = null` and `state.dayMs = Number(value)` as now. In both cases set `state.carryMs = 0`.
+- In the loop, when `state.playing`:
+  - if `state.yearMs`: `const r = advanceByDays(state.simTime, state.carryMs, elapsedMs, state.yearMs); state.simTime = r.simTime; state.carryMs = r.carryMs;`
+  - otherwise use `advanceTime` exactly as now.
+- Nothing else changes. The date input, time slider, clock and sunrise/sunset text already follow `state.simTime`. The time stays fixed in UTC, so the UK clock shows one hour later in summer (BST) than in winter (GMT). That is correct and expected.
+
+**Done when**
+
+- [ ] `node -e "import('./js/geo.js').then(m => { const t = new Date('2026-06-21T12:00:00Z'); [[0,1000],[0,16],[150,16]].forEach(([c,e]) => { const r = m.advanceByDays(t, c, e, 60000); console.log(r.simTime.toISOString(), r.carryMs.toFixed(1)); }); })"` prints:
+  ```
+  2026-06-27T12:00:00.000Z 14.4
+  2026-06-21T12:00:00.000Z 16.0
+  2026-06-22T12:00:00.000Z 1.7
+  ```
+- [ ] 60 s of 16 ms frames is exactly a year, at the same time of day: `node -e "import('./js/geo.js').then(m => { let s = { simTime: new Date('2026-03-20T12:00:00Z'), carryMs: 0 }; for (let i = 0; i < 3750; i++) s = m.advanceByDays(s.simTime, s.carryMs, 16, 60000); console.log(s.simTime.toISOString()); })"` prints `2027-03-20T12:00:00.000Z`
+- [ ] `node -e "const fs = require('fs'), j = fs.readFileSync('js/main.js', 'utf8'), h = fs.readFileSync('index.html', 'utf8'); console.log(/advanceByDays\(\s*state\.simTime/.test(j), /advanceTime\(\s*state\.simTime/.test(j), /<option value=\"year60\">1 year in 60 s<\/option>/.test(h))"` prints `true true true`
+- [ ] (browser) Choose "1 year in 60 s", spin mode, Play: the Earth holds still while the white axis's lean turns once round in about a minute; the Arctic is lit all round near June and dark near December. No flicker.
+- [ ] (browser) The same in orbit mode: the sun slides up to the Tropic of Cancer and down to the Tropic of Capricorn and back, all in a minute.
+- [ ] (browser) The date input counts through the year (about six days a second), and the time slider stays put apart from a one-hour jump at the BST changes.
+- [ ] (browser) Switch back to "1 day in 24 s": normal play resumes from wherever the year got to.
+
+---
+
+## Step 13: Fixes
+
+Three things found by using the page, plus one safety fix.
+
+### 13a. Sun-path guides are hard to see in daylight (`js/horizon.js`)
+
+The midsummer and midwinter arcs and their "21 Jun" / "21 Dec" labels are white at 35% opacity, which almost vanishes on the pale daytime sky. The yellow line for the chosen day is also weak against the pale blue. In `drawHorizon`, after the sky colours are chosen, add:
+
+```js
+const day = alt >= 0;
+const guide = day ? 'rgba(15,30,70,0.7)' : 'rgba(255,255,255,0.5)';
+const guideText = day ? 'rgba(15,30,70,0.9)' : 'rgba(255,255,255,0.75)';
+```
+
+- Draw the midsummer and midwinter paths with `guide` (still dashed, `lineWidth` 1.5), and the "21 Jun" / "21 Dec" labels with `guideText`.
+- When `day`, draw the chosen day's path twice: first `'rgba(15,30,70,0.6)'` at `lineWidth` 4, then the existing `'#ffd23f'` at `lineWidth` 2 on top, so the yellow has a dark edge. At night or twilight draw it once, as now.
+
+### 13b. Buttons jump when their text changes (`style.css`)
+
+The controls are centred in a wrapping row, so when a button's text changes ("Show horizon" ↔ "Show globe", "Earth spins" ↔ "Sun orbits", "Play" ↔ "Pause"), its width changes and every control after it moves. Fix with fixed minimum widths, and give every button in `#sun-controls` the same look (Midsummer, Midwinter, Equinox and the orbit/spin button have no style yet). Replace the `#play-btn, #view-toggle { … }` rule and its `:focus-visible` rule with:
+
+```css
+#sun-controls button {
+  padding: 0.3rem 0.8rem;
+  font-size: 0.95rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--fg);
+  cursor: pointer;
+  text-align: center;
+}
+
+#play-btn { min-width: 9ch; }
+#view-toggle, #orbit-spin-btn { min-width: 14ch; }
+
+#sun-controls button:focus-visible,
+#date-input:focus-visible, #speed-select:focus-visible {
+  outline: 2px solid #3d8fe0;
+  outline-offset: 2px;
+}
+```
+
+### 13c. The page jumps when switching globe ↔ horizon (`style.css`)
+
+The globe is square (up to 80vh tall) and the horizon is 3:1, so the page gets much shorter when the horizon shows. If the page was scrolled down, the browser jumps it. Make `#views` keep the globe's height whichever view is showing; the horizon sits at the top of that space:
+
+```css
+#views {
+  display: flex; flex-direction: column; align-items: center; gap: 1rem;
+  justify-content: flex-start;
+  min-height: min(80vh, 100vw - 2rem, 868px);
+}
+```
+
+(`868px` is the 900px body width minus its padding, so the box matches the globe's height on desktop.)
+
+### 13d. One error stops the animation for good (`js/main.js`)
+
+`tick` calls `requestAnimationFrame(tick)` as its **last** line, so if anything inside it throws, the next frame is never requested and the page freezes. Move `requestAnimationFrame(tick);` to be the **first** line inside `tick`. Also delete the unused `const ukStr = …` line in the `#date-input` change handler.
+
+**Done when**
+
+- [ ] `node -e "const h = require('fs').readFileSync('js/horizon.js', 'utf8'); console.log(h.includes('rgba(15,30,70,0.7)'), h.includes('rgba(15,30,70,0.9)'), /alt\s*>=\s*0/.test(h), h.includes('rgba(255,255,255,0.35)'))"` prints `true true true false`
+- [ ] `node -e "const c = require('fs').readFileSync('style.css', 'utf8'); console.log(/#sun-controls button\s*\{/.test(c), /#play-btn\s*\{\s*min-width:\s*9ch/.test(c), /#view-toggle,\s*#orbit-spin-btn\s*\{\s*min-width:\s*14ch/.test(c), /min-height:\s*min\(80vh/.test(c), /#play-btn,\s*#view-toggle\s*\{/.test(c))"` prints `true true true true false`
+- [ ] `node -e "const j = require('fs').readFileSync('js/main.js', 'utf8'); console.log(/function tick\(ts\)\s*\{\s*requestAnimationFrame\(tick\)/.test(j), (j.match(/requestAnimationFrame\(tick\)/g) || []).length, /ukStr/.test(j))"` prints `true 2 false` (one call inside `tick`, one to start it)
+- [ ] All the checks from Steps 1–12 still pass.
+- [ ] (browser, desktop width) Click "Show horizon" and "Show globe" several times: the button stays under the mouse and nothing else in the controls row moves. The same for "Earth spins"/"Sun orbits" and "Play"/"Pause".
+- [ ] (browser) Scroll down a little, then switch to the horizon: the page doesn't jump.
+- [ ] (browser) Horizon at midday in June: the dashed 21 Jun and 21 Dec arcs and their labels show clearly in dark blue on the sky, and the yellow line has a dark edge. At night they are white again.
+- [ ] (browser) All the buttons in the controls row look alike.
