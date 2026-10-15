@@ -1,7 +1,7 @@
 // 2D horizon canvas — no Three.js.
 
 import { sunAltAz, sunPath, sunEvents } from './geo.js';
-import { uForAz, nightAlpha, stripSourceHeight } from './pano.js';
+import { STRIP_W, uForAz, nightAlpha, stripSourceHeight } from './pano.js';
 
 /** Convert azimuth/altitude to pixel coordinates on the horizon canvas. */
 export function azAltToXY(az, alt, width, height, bottom = -10) {
@@ -59,7 +59,7 @@ export function drawHorizon(canvas, state) {
 
   // Ground — replaced by photo if available
   if (state.horizonPhoto) {
-    ctx.drawImage(state.horizonPhoto, 0, 0, w, stripSourceHeight(state.groundDeg), 0, 0, w, h);
+    ctx.drawImage(state.horizonPhoto, 0, 0, STRIP_W, stripSourceHeight(state.groundDeg), 0, 0, w, h);
 
     // Night overlay: one fill over the whole canvas
     ctx.fillStyle = `rgba(6,10,31,${nightAlpha(alt)})`;

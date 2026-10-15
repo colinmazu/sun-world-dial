@@ -1,0 +1,3 @@
+*.JPG
+*.jpg
+!assets/*.jpg
