@@ -1,6 +1,6 @@
 // Shared state, form handling, animation loop.
 
-import { normalisePostcode, formatLatLon, advanceTime, advanceByDays, sunEvents } from './geo.js';
+import { normalisePostcode, formatLatLon, advanceTime, advanceByDays, sunEvents, twilightTimes } from './geo.js';
 import { keyAction } from './geo.js';
 import { lookupPostcode, nearestPostcode } from './postcode.js';
 import { createGlobe, setMarker, updateGlobe, setGlobeMode, getGlobeMode } from './globe.js';
@@ -90,6 +90,7 @@ const viewToggle = document.getElementById('view-toggle');
 const globeDiv = document.getElementById('globe');
 const horizonCanvas = document.getElementById('horizon');
 const sunTimesEl = document.getElementById('sun-times');
+const twilightEl = document.getElementById('twilight-times');
 const timeSlider = document.getElementById('time-slider');
 const timeDisplay = document.getElementById('time-display');
 
@@ -196,6 +197,22 @@ function updateSunTimes() {
   const m = diffMin % 60;
   sunTimesEl.textContent =
     `Sunrise ${riseT} (${riseAz}°) · Sunset ${setT} (${setAz}°) · Day length ${h} h ${m.toString().padStart(2, '0')} m`;
+  twilightEl.textContent = twilightText(state.simTime, state.lat, state.lon);
+}
+
+/** A UK hh:mm, or "—" for a missing or Invalid Date. */
+function hhmm(d) {
+  return d && !isNaN(d.getTime()) ? ukTimeFmt.format(d) : '\u2014';
+}
+
+/** "Morning: dark until 06:12 · golden hour 08:22–09:29 · Evening: golden hour 14:48–15:55 · dark from 18:05" */
+function twilightText(date, lat, lon) {
+  const t = twilightTimes(date, lat, lon);
+  const neverDark = isNaN(t.night.getTime()) && isNaN(t.nightEnd.getTime());
+  return 'Morning: ' + (neverDark ? '' : `dark until ${hhmm(t.nightEnd)} \u00b7 `) +
+    `golden hour ${hhmm(t.sunrise)}\u2013${hhmm(t.goldenHourEnd)} \u00b7 ` +
+    `Evening: golden hour ${hhmm(t.goldenHour)}\u2013${hhmm(t.sunset)} \u00b7 ` +
+    (neverDark ? 'never fully dark' : `dark from ${hhmm(t.night)}`);
 }
 
 // View toggle: switch between globe and horizon

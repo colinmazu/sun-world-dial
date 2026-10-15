@@ -115,7 +115,7 @@ export function keyAction(key) {
 }
 
 /** Return an array of { az, alt } points for the sun path every 10 minutes on a UK calendar day. */
-export function sunPath(date, lat, lon) {
+export function sunPath(date, lat, lon, minAlt = -10) {
   const ukParts = new Intl.DateTimeFormat('en-GB', {
     timeZone: 'Europe/London', year: 'numeric', month: 'numeric', day: 'numeric',
   }).formatToParts(date);
@@ -137,9 +137,37 @@ export function sunPath(date, lat, lon) {
   for (let mins = 0; mins < 1440; mins += 10) {
     const t = new Date(startMs + mins * 60000);
     const p = sunAltAz(t, lat, lon);
-    if (p.alt > -10) {
+    if (p.alt > minAlt) {
       points.push(p);
     }
   }
   return points;
+}
+
+/** The twilight phase for a sun altitude in degrees. */
+export function twilightPhase(alt) {
+  if (alt >= 6) return 'day';
+  if (alt >= 0) return 'golden';
+  if (alt >= -6) return 'civil';
+  if (alt >= -12) return 'nautical';
+  if (alt >= -18) return 'astro';
+  return 'night';
+}
+
+/** Morning and evening twilight times for the UK day of `date` (Dates; Invalid Date if it never happens). */
+export function twilightTimes(date, lat, lon) {
+  const t = globalThis.SunCalc.getTimes(ukNoon(date), lat, lon);
+  return {
+    nightEnd: t.nightEnd, goldenHourEnd: t.goldenHourEnd, sunrise: t.sunrise,
+    sunset: t.sunset, goldenHour: t.goldenHour, night: t.night,
+  };
+}
+
+/** 12:00 UK time on the UK calendar day of `date`. */
+function ukNoon(date) {
+  const p = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Europe/London', year: 'numeric', month: 'numeric', day: 'numeric',
+  }).formatToParts(date);
+  const n = t => Number(p.find(x => x.type === t).value);
+  return new Date(Date.UTC(n('year'), n('month') - 1, n('day'), 12));
 }

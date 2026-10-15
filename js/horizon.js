@@ -1,7 +1,12 @@
 // 2D horizon canvas — no Three.js.
 
-import { sunAltAz, sunPath, sunEvents } from './geo.js';
+import { sunAltAz, sunPath, sunEvents, twilightPhase } from './geo.js';
 import { STRIP_W, nightAlpha, stripSourceHeight } from './pano.js';
+
+/** Path colours for each twilight phase. */
+export const PHASE_COLOURS = {
+  day: '#ffd23f', golden: '#ff9a3c', civil: '#e86fa0', nautical: '#7a6fe0', astro: '#3a4aa8',
+};
 
 /** Convert azimuth/altitude to pixel coordinates on the horizon canvas. */
 export function azAltToXY(az, alt, width, height, bottom = -10) {
@@ -122,7 +127,8 @@ export function drawHorizon(canvas, state) {
     ctx.moveTo(start.x, start.y);
     for (let i = 1; i < points.length; i++) {
       const p = azAltToXY(points[i].az, points[i].alt, w, h, bottom);
-      ctx.lineTo(p.x, p.y);
+      if (Math.abs(points[i].az - points[i - 1].az) > 180) ctx.moveTo(p.x, p.y); // past north: don't join across the view
+      else ctx.lineTo(p.x, p.y);
     }
     ctx.stroke();
     ctx.setLineDash([]);
@@ -136,12 +142,29 @@ export function drawHorizon(canvas, state) {
   const midwinterDate = new Date(Date.UTC(year, 11, 21, 12, 0, 0));
   drawPathLine(sunPath(midwinterDate, state.lat, state.lon), guide, 1.5, true);
 
-  // Current day path — solid yellow (with dark edge during day for contrast)
-  const todayPath = sunPath(state.simTime, state.lat, state.lon);
-  if (day) {
-    drawPathLine(todayPath, 'rgba(15,30,70,0.6)', 4, false);
+  // Today's path, down to -18°, in pieces coloured by twilight phase, each with a dark edge for contrast
+  const todayPath = sunPath(state.simTime, state.lat, state.lon, -18);
+  const pieces = [];
+  for (let i = 1; i < todayPath.length; i++) {
+    const a = todayPath[i - 1], b = todayPath[i];
+    pieces.push({ a, b, phase: twilightPhase((a.alt + b.alt) / 2) });
   }
-  drawPathLine(todayPath, '#ffd23f', 2, false);
+  ctx.lineCap = 'round';
+  for (const p of pieces) drawPathLine([p.a, p.b], 'rgba(15,30,70,0.6)', 5, false);
+  for (const p of pieces) drawPathLine([p.a, p.b], PHASE_COLOURS[p.phase], p.phase === 'day' ? 2 : 3, false);
+  ctx.lineCap = 'butt';
+
+  // Legend, top left
+  ctx.font = '11px system-ui, sans-serif';
+  ctx.textAlign = 'left';
+  const legend = [['golden', 'Golden hour'], ['civil', 'Civil twilight'], ['nautical', 'Nautical'], ['astro', 'Astronomical']];
+  legend.forEach(([phase, text], i) => {
+    ctx.fillStyle = PHASE_COLOURS[phase];
+    ctx.fillRect(8, 8 + i * 15, 14, 4);
+    ctx.fillStyle = guideText;
+    ctx.fillText(text, 26, 13 + i * 15);
+  });
+  ctx.textAlign = 'center';
 
   // Labels for solstice paths near their highest point
   ctx.font = '11px system-ui, sans-serif';
