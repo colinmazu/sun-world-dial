@@ -28,7 +28,7 @@ body {
   padding: 1rem;
 }
 
-/* header */
+/* header / top bar */
 header { text-align: center; padding: 1rem 0; }
 h1 { font-size: 1.75rem; }
 
@@ -83,6 +83,24 @@ h1 { font-size: 1.75rem; }
   flex-wrap: wrap;
   align-items: center;
   margin: 1rem 0;
+}
+
+#sun-controls fieldset {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.5rem 0.75rem;
+}
+
+#sun-controls legend {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #888;
+  padding: 0 0.25rem;
 }
 
 #sun-controls label { font-weight: 600; }
@@ -228,4 +246,21 @@ h1 { font-size: 1.75rem; }
 /* Reduced motion — disable orbit damping */
 @media (prefers-reduced-motion: reduce) {
   * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
+
+/* Desktop layout (≥ 1000 px) */
+@media (min-width: 1000px) {
+  body { max-width: none; padding: 0 1rem 1rem; }
+  #topbar { display: flex; align-items: center; gap: 1rem; padding: 0.5rem 0; text-align: left; }
+  #topbar h1 { font-size: 1.15rem; white-space: nowrap; }
+  #postcode-form { margin: 0; flex-wrap: nowrap; }
+  #postcode-form label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  #location-result { margin: 0; text-align: left; }
+  #sim-clock { margin-left: auto; width: auto; }
+  #layout { display: grid; grid-template-columns: 280px 1fr; gap: 1rem; align-items: start; }
+  #sidebar { position: sticky; top: 0.5rem; max-height: calc(100vh - 4rem); overflow-y: auto; }
+  #sun-controls { flex-direction: column; align-items: stretch; justify-content: flex-start; margin: 0; }
+  #views { min-height: calc(100vh - 7rem); }
+  #globe { height: calc(100vh - 7rem); max-height: none; aspect-ratio: auto; }
+  #horizon { width: min(100%, calc((100vh - 7rem) * var(--hr, 3))); margin: 0 auto; }
 }

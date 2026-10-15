@@ -15,65 +15,78 @@
   <script src="vendor/exifr-lite.umd.js"></script>
 </head>
 <body>
-  <header>
-    <h1>Sun World Dial</h1>
-  </header>
-  <main>
+  <header id="topbar">
+    <h1>☀ Sun World Dial</h1>
     <form id="postcode-form">
       <label for="postcode-input">Your UK postcode</label>
-      <input type="text" id="postcode-input" autocomplete="postal-code" required>
+      <input type="text" id="postcode-input" autocomplete="postal-code" required placeholder="UK postcode">
       <button type="submit">Find me</button>
     </form>
     <p id="location-result" aria-live="polite"></p>
-    <section id="sun-controls">
-      <label for="date-input">Date</label>
-      <input type="date" id="date-input">
-      <button id="play-btn">Play</button>
-      <label for="speed-select">Speed</label>
-      <select id="speed-select">
-        <option value="12000">1 day in 12 s</option>
-        <option value="24000" selected>1 day in 24 s</option>
-        <option value="60000">1 day in 60 s</option>
-        <option value="year60">1 year in 60 s</option>
-      </select>
-      <label for="time-slider">Time</label>
-      <input type="range" id="time-slider" min="0" max="1439" step="1" value="720">
-      <output id="time-display"></output>
-      <button id="view-toggle">Show horizon</button>
-      <button id="midsummer-btn">Midsummer</button>
-      <button id="midwinter-btn">Midwinter</button>
-      <button id="equinox-btn">Equinox</button>
-      <button id="orbit-spin-btn" type="button">Earth spins</button>
-      <p id="sim-clock" aria-live="off"></p>
+    <p id="sim-clock" aria-live="off"></p>
+  </header>
+  <main id="layout">
+    <aside id="sidebar">
+      <section id="sun-controls">
+        <fieldset>
+          <legend>Time</legend>
+          <label for="date-input">Date</label>
+          <input type="date" id="date-input">
+          <label for="time-slider">Time</label>
+          <input type="range" id="time-slider" min="0" max="1439" step="1" value="720">
+          <output id="time-display"></output>
+          <button id="play-btn">Play</button>
+          <label for="speed-select">Speed</label>
+          <select id="speed-select">
+            <option value="12000">1 day in 12 s</option>
+            <option value="24000" selected>1 day in 24 s</option>
+            <option value="60000">1 day in 60 s</option>
+            <option value="year60">1 year in 60 s</option>
+          </select>
+        </fieldset>
+        <fieldset>
+          <legend>Season</legend>
+          <button id="midsummer-btn">Midsummer</button>
+          <button id="midwinter-btn">Midwinter</button>
+          <button id="equinox-btn">Equinox</button>
+        </fieldset>
+        <fieldset>
+          <legend>View</legend>
+          <button id="view-toggle">Show horizon</button>
+          <button id="orbit-spin-btn" type="button">Earth spins</button>
+        </fieldset>
+      </section>
+      <details id="pano-panel">
+        <summary>Horizon photo</summary>
+        <div id="ground-control">
+          <label for="ground-slider">Ground</label>
+          <input type="range" id="ground-slider" min="10" max="60" step="5" value="10">
+          <output id="ground-display">10°</output>
+        </div>
+        <label for="pano-input">Load a 360° photo</label>
+        <input type="file" id="pano-input" accept="image/jpeg">
+        <p id="pano-status" aria-live="polite"></p>
+        <div id="pano-buttons">
+          <button type="button" id="pano-south-btn" disabled>Set south</button>
+          <button type="button" id="pano-sun-btn" disabled>Click the sun</button>
+          <button type="button" id="pano-left" disabled>◀ 1°</button>
+          <button type="button" id="pano-right" disabled>1° ▶</button>
+          <button type="button" id="pano-location-btn" disabled>Use photo's location</button>
+          <button type="button" id="pano-time-btn" disabled>Go to photo's time</button>
+          <button type="button" id="pano-save-btn">Save</button>
+          <button type="button" id="pano-clear-btn">Clear</button>
+        </div>
+      </details>
+    </aside>
+    <section id="stage">
+      <section id="views">
+        <div id="globe"></div>
+        <canvas id="horizon" hidden></canvas>
+      </section>
+      <p id="sun-times"></p>
+      <canvas id="pano-preview" hidden></canvas>
     </section>
-    <section id="views">
-      <div id="globe"></div>
-      <canvas id="horizon" hidden></canvas>
-    </section>
-    <p id="sun-times"></p>
   </main>
-  <details id="pano-panel">
-    <summary>Horizon photo</summary>
-    <div id="ground-control">
-      <label for="ground-slider">Ground</label>
-      <input type="range" id="ground-slider" min="10" max="60" step="5" value="10">
-      <output id="ground-display">10°</output>
-    </div>
-    <label for="pano-input">Load a 360° photo</label>
-    <input type="file" id="pano-input" accept="image/jpeg">
-    <p id="pano-status" aria-live="polite"></p>
-    <canvas id="pano-preview" hidden></canvas>
-    <div id="pano-buttons">
-      <button type="button" id="pano-south-btn" disabled>Set south</button>
-      <button type="button" id="pano-sun-btn" disabled>Click the sun</button>
-      <button type="button" id="pano-left" disabled>◀ 1°</button>
-      <button type="button" id="pano-right" disabled>1° ▶</button>
-      <button type="button" id="pano-location-btn" disabled>Use photo's location</button>
-      <button type="button" id="pano-time-btn" disabled>Go to photo's time</button>
-      <button type="button" id="pano-save-btn">Save</button>
-      <button type="button" id="pano-clear-btn">Clear</button>
-    </div>
-  </details>
   <script type="module" src="js/main.js"></script>
 </body>
 </html>

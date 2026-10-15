@@ -28,12 +28,13 @@ export function createGlobe(container) {
   const resize = () => {
     const w = container.clientWidth;
     const h = container.clientHeight;
+    if (w === 0 || h === 0) return;
     renderer.setSize(w, h);
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
   };
   resize();
-  window.addEventListener('resize', resize);
+  new ResizeObserver(resize).observe(container);
   container.appendChild(renderer.domElement);
 
   // Earth texture

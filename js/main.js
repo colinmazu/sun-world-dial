@@ -222,6 +222,7 @@ function applyGround(deg) {
   groundSlider.value = deg;
   groundDisplay.textContent = deg + '°';
   horizonCanvas.style.aspectRatio = '240 / ' + (70 + deg);
+  horizonCanvas.style.setProperty('--hr', String(240 / (70 + deg)));
   try { localStorage.setItem('sunworld.groundDeg', String(deg)); } catch {}
 }
 
