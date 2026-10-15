@@ -973,3 +973,81 @@ It works with or without a photo (without one, there is simply more green ground
 - [ ] (browser) With the drone photo loaded: at 40–60° the streets and buildings below the drone come into view, and the S line on the preview still matches the S label on the horizon.
 - [ ] (browser) Reload: the Ground setting and the photo are both remembered, and the photo is drawn at the new depth.
 - [ ] (browser) The night overlay still covers the whole (taller) view.
+
+---
+
+## Step 18: Night overlay, storing the photo, and saving the strip (finishing Step 16)
+
+Do this after Step 17. Step 16 was built differently from its spec, and two of its node checks fail:
+
+- **Night:** `drawNightOverlay` recalculates the sun's position for 240 columns every frame and invents a darkness model. The spec asked for one simple overlay using `nightAlpha`, which doesn't exist.
+- **Storage:** the whole 4096×2048 decoded photo is saved (~1.8 million characters, close to the browser's ~5 MB limit), and only when "Save small image" is pressed.
+- **"Save small image"** writes to `localStorage` instead of downloading a file.
+- The compass labels have no outline, so they are hard to read on a photo.
+
+### 18a. Night overlay (`js/pano.js`, `js/horizon.js`)
+
+- Add to `pano.js`: `export function nightAlpha(alt)` → `Math.min(Math.max(-alt / 12, 0), 1) * 0.8`.
+- In `horizon.js`, **delete `drawNightOverlay`** and its call. Straight after drawing the photo, do one fill over the whole canvas: `` ctx.fillStyle = `rgba(6,10,31,${nightAlpha(alt)})`; ctx.fillRect(0, 0, w, h); `` (`alt` is the sun's altitude already worked out at the top of `drawHorizon`). Remove imports that are no longer used.
+
+### 18b. Compass labels on a photo (`js/horizon.js`)
+
+When `state.horizonPhoto` is set, draw each compass label with a dark outline first: `ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,0.7)'; ctx.strokeText(l.text, px, horizonY + 14);`, then `ctx.fillStyle = '#fff'` and `fillText` as now. Without a photo, keep the labels as they are.
+
+### 18c. Store a crop of the photo, not the whole thing (`js/pano.js`, `js/pano-ui.js`)
+
+Store only the band the horizon can ever show: **all the way round, from 70° down to −60°** (`STRIP_LOW`), at 3024×1092. That is about 0.77 million characters, against ~1.8 million now. Because it still goes all the way round, south can be re-aimed after a reload. 3024 px for 360° gives 2520 px for the 300° strip, so the 2400 px strip is never enlarged.
+
+**`js/pano.js`**, add:
+
+```js
+/** Size of the band kept in storage: 360° wide, from 70° down to STRIP_LOW (130°). */
+export const BAND_W = 3024;
+export const BAND_H = 1092;
+```
+
+- `panoBandRect(meta)` → one `{ sx, sy, sw, sh, dx, dy, dw, dh }` (or `null` if nothing is left after clipping) that copies the photo's band into a `BAND_W`×`BAND_H` canvas:
+  - **Rows:** altitude 70° → −60°, so source rows `meta.fullH * 20 / 180 - meta.top` to `meta.fullH * (90 - STRIP_LOW) / 180 - meta.top`, mapped to destination rows 0 → `BAND_H`. Clip them to `0..meta.h` with the **same clipping helper** `panoCropRects` uses.
+  - **Columns:** the whole image, `sx = 0`, `sw = meta.w`. Destination `dx = meta.left * k`, `dw = meta.w * k`, where `k = BAND_W / meta.fullW`.
+- `bandExif()` → the GPano tags that describe the stored band, so `panoMeta` reads it back correctly:
+  `{ FullPanoWidthPixels: BAND_W, FullPanoHeightPixels: BAND_W / 2, CroppedAreaImageWidthPixels: BAND_W, CroppedAreaImageHeightPixels: BAND_H, CroppedAreaLeftPixels: 0, CroppedAreaTopPixels: BAND_W / 2 * 20 / 180 }`.
+
+**`js/pano-ui.js`**: remove `STORAGE_KEY`, `savePhoto` and `loadSavedPhoto`, and use two keys. Wrap every `localStorage` call in `try { … } catch { … }`.
+
+- `localStorage['sunworld.horizonPhoto']`: the band as `band.toDataURL('image/jpeg', 0.85)`. It is written **once, when a new photo has been loaded from the file input**: make a `BAND_W`×`BAND_H` canvas, `drawImage(img, …)` with `panoBandRect(meta)`, then save. It is not written again when south changes, so the photo isn't re-compressed.
+- `localStorage['sunworld.horizonPhotoInfo']`: JSON `{ name, southU, photoTime, exif }`. `name` is the file name, `photoTime` is an ISO string or `null`, and `exif` keeps only `latitude`, `longitude`, `DateTimeOriginal` and `OffsetTimeOriginal`. It is written after a photo is loaded and after **every** change of south (Set south, Click the sun, ◀ / ▶), 500 ms after the last change (reset a `setTimeout` each time).
+- If either write fails, set the status "Couldn't remember the photo (the browser's storage is full or blocked)." and carry on.
+- **On startup**, if both keys are present:
+  - Load the image with `new Image()`, and use it **as it is**. Don't resize it, and don't use `decodeSmall`.
+  - Set `exifData = { ...info.exif, ...bandExif() }`, `meta = panoMeta(exifData, BAND_W, BAND_H)`, `southU = info.southU` and `photoTime` from `info.photoTime`.
+  - Then carry on exactly as after loading a file (preview, buttons, rebuild the strip), with the status "Using the saved photo: <name>." Re-aiming works as normal.
+- **Old data:** if the Step 16 key `'sunWorldDial_pano'` exists, remove it and set the status "Please load your photo again (it was stored in an older format)."
+
+### 18d. "Save small image" downloads the strip (`js/pano-ui.js`)
+
+`#pano-save-btn`: `strip.toBlob(b => { … }, 'image/jpeg', 0.9)`. Inside, make an object URL, then a temporary `<a>` with `download = 'horizon-YYYY-MM-DD.jpg'`, using `photoTime`'s UK date (or today's). Click it, then revoke the URL. Status "Saved horizon-YYYY-MM-DD.jpg.". It doesn't touch `localStorage`.
+
+### 18e. "Remove photo" (`js/pano-ui.js`)
+
+Remove both keys (and `'sunWorldDial_pano'`), set `state.horizonPhoto = null`, clear `#pano-input`'s value, hide the preview, disable the panel's buttons and set the status "Photo removed.".
+
+**Done when**
+
+- [ ] All Step 14–17 checks pass, **including the two Step 16 checks that failed before**.
+- [ ] `node -e "import('./js/pano.js').then(m => { const r = o => JSON.stringify(o, (k, v) => typeof v === 'number' ? Math.round(v * 1000) / 1000 : v); const full = m.panoMeta({}, 4096, 2048), part = m.panoMeta({ FullPanoWidthPixels: 19490, FullPanoHeightPixels: 9745, CroppedAreaImageWidthPixels: 19490, CroppedAreaLeftPixels: 0, CroppedAreaTopPixels: 1620 }, 4096, 1367); console.log(m.BAND_W, m.BAND_H, r(m.bandExif())); console.log(r(m.panoBandRect(full))); console.log(r(m.panoBandRect(part))); })"` prints:
+  ```
+  3024 1092 {"FullPanoWidthPixels":3024,"FullPanoHeightPixels":1512,"CroppedAreaImageWidthPixels":3024,"CroppedAreaImageHeightPixels":1092,"CroppedAreaLeftPixels":0,"CroppedAreaTopPixels":168}
+  {"sx":0,"sy":227.556,"sw":4096,"sh":1479.111,"dx":0,"dy":0,"dw":3024,"dh":1092}
+  {"sx":0,"sy":0,"sw":4096,"sh":1366.209,"dx":0,"dy":83.354,"dw":3024,"dh":1008.646}
+  ```
+- [ ] The stored band gives the same horizon strip as the full photo: `node -e "import('./js/pano.js').then(m => { const r = o => JSON.stringify(o, (k, v) => typeof v === 'number' ? Math.round(v * 1000) / 1000 : v); const band = m.panoMeta(m.bandExif(), m.BAND_W, m.BAND_H); console.log(r(band)); console.log(r(m.panoCropRects(band, 0.5, 2400, 1300, -60))); })"` prints:
+  ```
+  {"fullW":3024,"fullH":1512,"left":0,"top":168,"w":3024,"h":1092}
+  [{"sx":252,"sy":0,"sw":2520,"sh":1092,"dx":0,"dy":0,"dw":2400,"dh":1300}]
+  ```
+- [ ] `node -e "const fs = require('fs'), p = fs.readFileSync('js/pano-ui.js', 'utf8'), z = fs.readFileSync('js/horizon.js', 'utf8'); console.log(/drawNightOverlay/.test(z), /sunAltAz\(/.test(z.replace(/const \{ alt, az \} = sunAltAz\([^)]*\);/, '')), /STORAGE_KEY|savePhoto|loadSavedPhoto/.test(p), (p.match(/toDataURL\(/g) || []).length, /panoBandRect\(/.test(p), /bandExif\(\)/.test(p), /\.download\s*=/.test(p))"` prints `false false false 1 true true true` (no per-column overlay; the sun's position is worked out once per frame; only the band is ever encoded with `toDataURL`)
+- [ ] (browser) Load the DJI photo, then open DevTools → Application → Local Storage → localhost:8000. `sunworld.horizonPhoto` is about 0.8 million characters, `sunworld.horizonPhotoInfo` is small, and `sunWorldDial_pano` is gone.
+- [ ] (browser) Reload: the photo comes back in the horizon view with the same south; ◀ / ▶ still re-aim it, and after another reload the new south is kept.
+- [ ] (browser) Play past sunset: the whole photo darkens evenly to deep blue by the time the sun is 12° down, with no stripes, and lightens again at dawn. The compass labels stay readable.
+- [ ] (browser) "Save small image" downloads `horizon-2023-12-25.jpg` (2400×1300) for the sample photo.
+- [ ] (browser) "Remove photo", then reload: the drawn sky and ground are back.
