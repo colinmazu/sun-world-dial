@@ -1,6 +1,7 @@
 // 2D horizon canvas — no Three.js.
 
 import { sunAltAz, sunPath, sunEvents } from './geo.js';
+import { uForAz } from './pano.js';
 
 /** Convert azimuth/altitude to pixel coordinates on the horizon canvas. */
 export function azAltToXY(az, alt, width, height) {
@@ -58,6 +59,9 @@ export function drawHorizon(canvas, state) {
   // Ground — replaced by photo if available
   if (state.horizonPhoto) {
     ctx.drawImage(state.horizonPhoto, 0, 0, w, h);
+
+    // Night overlay: darken the photo where it is dark at each azimuth column.
+    drawNightOverlay(ctx, state, w, h);
   } else {
     ctx.fillStyle = '#2f4a2f';
     ctx.fillRect(0, horizonY, w, h - horizonY);
@@ -164,5 +168,52 @@ export function drawHorizon(canvas, state) {
     ctx.arc(sunPos.x, sunPos.y, 12, 0, Math.PI * 2);
     ctx.fillStyle = '#ffd23f';
     ctx.fill();
+  }
+}
+
+/** Draw a per-column night-darkening overlay on the photo. */
+function drawNightOverlay(ctx, state, w, h) {
+  // For each pixel column, find the azimuth and compute sun altitude there.
+  const cols = Math.min(w, 240);
+  const colW = w / cols;
+
+  for (let i = 0; i < cols; i++) {
+    // Azimuth at this column: x = (az - 30) / 300 * w → az = 30 + (x / w) * 300
+    const cx = i * colW + colW / 2;
+    const az = 30 + (cx / w) * 300;
+
+    // Compute sun altitude at this azimuth by finding the time when the sun is at this bearing.
+    // We use a simpler approach: compute darkness from the current sun position relative to this column's azimuth.
+    // The sun moves ~15°/hour in longitude, so we can estimate how far the sun is from this direction.
+    const { alt: curAlt, az: curAz } = sunAltAz(state.simTime, state.lat, state.lon);
+
+    // Angular distance between current sun azimuth and this column's azimuth (shortest arc).
+    let dAz = Math.abs(curAz - az) % 360;
+    if (dAz > 180) dAz = 360 - dAz;
+
+    // Darkness depends on how far the sun is from this direction and its altitude.
+    // When the sun is well above the horizon, it illuminates all directions → no darkening.
+    // As the sun goes below the horizon, darkness spreads from the opposite side.
+    let alpha = 0;
+
+    if (curAlt < 0) {
+      // Sun is below horizon — darken based on distance from sun's azimuth.
+      // Columns near the sun's azimuth are brighter (twilight glow), columns opposite are darker.
+      const maxDist = 180;
+      const brightness = Math.max(0, 1 - dAz / maxDist);
+      // The lower the sun goes, the more everything darkens.
+      const depthFactor = Math.min(1, Math.abs(curAlt) / 30);
+      alpha = (0.85 - 0.4 * brightness) * depthFactor;
+    } else if (curAlt < 6) {
+      // Low sun — slight warm glow on the opposite side.
+      const maxDist = 180;
+      const oppGlow = Math.max(0, (dAz - 90) / 90);
+      alpha = -0.05 * oppGlow * (6 - curAlt) / 6; // slight brightening on opposite side
+    }
+
+    if (alpha > 0) {
+      ctx.fillStyle = `rgba(0, 0, 10, ${Math.min(alpha, 0.85)})`;
+      ctx.fillRect(i * colW, 0, colW + 1, h);
+    }
   }
 }

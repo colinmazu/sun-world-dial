@@ -5,6 +5,8 @@ import { sunAltAz } from './geo.js';
 import { nearestPostcode } from './postcode.js';
 import { STRIP_W, STRIP_H, panoMeta, uForAz, southFromSun, uAtImageX, altAtImageY, panoCropRects, exifLocalToDate } from './pano.js';
 
+const STORAGE_KEY = 'sunWorldDial_pano';
+
 /** Decode a big photo straight to 4096 px wide, so the full-size image never has to fit on a canvas. */
 async function decodeSmall(file) {
   try {
@@ -17,6 +19,36 @@ async function decodeSmall(file) {
     c.getContext('2d').drawImage(full, 0, 0, c.width, c.height);
     full.close();
     return c;
+  }
+}
+
+/** Save the current photo (base64) and calibration to localStorage. */
+function savePhoto(img, southU, exifData, photoTime) {
+  const c = document.createElement('canvas');
+  c.width = img.width;
+  c.height = img.height;
+  c.getContext('2d').drawImage(img, 0, 0);
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+      data: c.toDataURL('image/jpeg', 0.85),
+      southU,
+      exifData,
+      photoTime: photoTime ? photoTime.toISOString() : null,
+    }));
+    return true;
+  } catch {
+    return false; // quota exceeded etc.
+  }
+}
+
+/** Load a saved photo from localStorage and apply it. Returns the data or null. */
+function loadSavedPhoto() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch {
+    return null;
   }
 }
 
@@ -44,6 +76,53 @@ export function initPano(state, { onLocation, onTime }) {
   const panoRight = document.getElementById('pano-right');
   const panoLocationBtn = document.getElementById('pano-location-btn');
   const panoTimeBtn = document.getElementById('pano-time-btn');
+  const panoSaveBtn = document.getElementById('pano-save-btn');
+  const panoClearBtn = document.getElementById('pano-clear-btn');
+
+  /** Apply loaded data to the panel (from localStorage or file). */
+  async function applyPhoto(imageData, savedSouthU, savedExif, savedTime) {
+    exifData = savedExif || {};
+    photoTime = savedTime ? new Date(savedTime) : null;
+
+    const imageBitmap = await createImageBitmap(
+      await (await fetch(imageData)).blob()
+    );
+    img = await decodeSmallFromBitmap(imageBitmap);
+    meta = panoMeta(exifData, img.width, img.height);
+    southU = savedSouthU ?? 0.5;
+
+    updateButtons();
+    panoPreview.hidden = false;
+    drawPreview();
+    rebuildStrip();
+
+    let statusMsg = '';
+    if (photoTime) {
+      const fmt = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+      statusMsg += fmt.format(photoTime);
+    }
+    const lat = exifData.latitude ?? exifData.lat;
+    const lon = exifData.longitude ?? exifData.lon;
+    if (lat != null && lon != null) {
+      statusMsg += ` at ${formatLatLon(lat, lon)}`;
+    }
+    if (statusMsg) statusMsg += '. ';
+    statusMsg += 'Use "Set south" or "Click the sun".';
+    panoStatus.textContent = statusMsg;
+  }
+
+  /** Decode from an ImageBitmap to 4096 px wide. */
+  async function decodeSmallFromBitmap(bitmap) {
+    try {
+      return await createImageBitmap(bitmap, { resizeWidth: 4096, resizeQuality: 'high' });
+    } catch {
+      const c = document.createElement('canvas');
+      c.width = 4096;
+      c.height = Math.round(4096 * bitmap.height / bitmap.width);
+      c.getContext('2d').drawImage(bitmap, 0, 0, c.width, c.height);
+      return c;
+    }
+  }
 
   /** Rebuild the strip from the current image and southU. */
   function rebuildStrip() {
@@ -271,4 +350,38 @@ export function initPano(state, { onLocation, onTime }) {
       onTime(photoTime);
     }
   });
+
+  // Save button
+  panoSaveBtn.addEventListener('click', () => {
+    if (!img) return;
+    const ok = savePhoto(img, southU, exifData, photoTime);
+    if (ok) {
+      panoStatus.textContent = 'Photo saved.';
+    } else {
+      panoStatus.textContent = "Couldn't save — storage full?";
+    }
+  });
+
+  // Clear button
+  panoClearBtn.addEventListener('click', () => {
+    localStorage.removeItem(STORAGE_KEY);
+    img = null;
+    meta = null;
+    exifData = null;
+    photoTime = null;
+    southU = 0.5;
+    clickMode = null;
+    state.horizonPhoto = null;
+    panoPreview.hidden = true;
+    updateButtons();
+    panoStatus.textContent = 'Cleared.';
+  });
+
+  // Auto-load saved photo on init
+  const saved = loadSavedPhoto();
+  if (saved) {
+    applyPhoto(saved.data, saved.southU, saved.exifData, saved.photoTime).then(() => {
+      panoStatus.textContent = 'Loaded saved photo.';
+    });
+  }
 }
